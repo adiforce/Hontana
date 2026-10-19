@@ -2,7 +2,7 @@
 
 ## words-jp.json
 
-日文單字（寫法、讀音、級別）取自 [jamsinclair/open-anki-jlpt-decks](https://github.com/jamsinclair/open-anki-jlpt-decks)，只挑出和中文同形、但意思不同或日文特有的 N5／N4 漢字詞。中文意思和提醒是 Hontana 自己整理的。
+日文單字（寫法、讀音、級別）取自 [jamsinclair/open-anki-jlpt-decks](https://github.com/jamsinclair/open-anki-jlpt-decks)，N5／N4 全部單字中，能對到兩字以上中文說法的都收了。中文對照是 Hontana 自己整理的。
 
 ```
 MIT License

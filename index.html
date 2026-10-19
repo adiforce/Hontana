@@ -76,16 +76,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 #flow p { margin: 0; white-space: pre-wrap; word-break: break-word; text-align: justify; }
 #flow p.gap { height: .6em; }
 #flow .jw { text-decoration: underline dotted color-mix(in srgb, var(--sub) 70%, transparent); text-underline-offset: .28em; text-decoration-thickness: 1.5px; cursor: pointer; }
-#flow .jw.ff { text-decoration: underline dotted var(--accent); text-decoration-thickness: 2px; }
 #flow .jw.on { background: color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 3px; }
 .wcard { position: absolute; z-index: 9; width: min(300px, calc(100vw - 32px)); background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 14px 16px 12px; font-family: var(--sans); user-select: text; -webkit-user-select: text; }
-.wcard .wh { display: flex; align-items: baseline; gap: 10px; }
+.wcard .wh { display: flex; align-items: center; gap: 10px; }
 .wcard .wj { font-family: "Hiragino Mincho ProN", "Yu Mincho", var(--serif); font-size: 26px; line-height: 1.2; }
 .wcard .wr { color: var(--sub); font-size: 15px; }
-.wcard .wl { margin-left: auto; font-size: 11px; padding: 2px 7px; border-radius: 9px; background: var(--ink); color: var(--paper); letter-spacing: .05em; }
-.wcard .wm { margin-top: 8px; font-size: 16px; }
-.wcard .wn { margin-top: 8px; font-size: 13px; color: var(--accent); line-height: 1.5; }
-.wcard .ws { margin-top: 10px; font-size: 13px; color: var(--sub); padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.wcard .wl { margin-left: auto; flex: none; font-size: 11px; padding: 2px 7px; border-radius: 9px; background: var(--ink); color: var(--paper); letter-spacing: .05em; }
+.wcard .wz { font-size: 13px; color: var(--sub); margin-bottom: 6px; }
+.wcard .wz b { color: var(--ink); font-family: var(--serif); font-size: 15px; }
+.wcard .wh + .wh { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.wcard .ws { flex: none; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); font-size: 15px; }
 #flow h2 { font-size: 1.25em; font-weight: 700; margin: .4em 0 1em; line-height: 1.5; break-after: avoid; text-align: left; }
 #flow .head { break-after: column; display: flex; flex-direction: column; justify-content: center; height: 100%; text-align: center; }
 #flow .head .bt { font-size: 1.7em; font-weight: 700; line-height: 1.5; }
@@ -299,25 +299,28 @@ function renderLib() {
 const R = { book: null, pages: 1, page: 0, stride: 1, paras: [], chaps: [], sig: '' };
 const CHAP_RE = /^\s*(第[\s0-9０-９一二三四五六七八九十百千零〇兩]+[章回節卷部集篇幕話]|序章|序言|序|楔子|引子|前言|尾聲|終章|後記|番外|附錄|Chapter\s*\d+|CHAPTER\s*\d+|Prologue|Epilogue)(\s|$|[：:．.、])/;
 
-/* ===== 日文單字：N5／N4 和中文同形的詞，標出來點一下看讀音和意思（資料在 words-jp.json，只收中日意思不同或日文特有的詞） ===== */
-const JP = { list: null, re: null, map: null, loading: null };
+/* ===== 日文單字：中文詞對到 JLPT N5／N4 的日文說法（資料在 words-jp.json），點一下看日文寫法、讀音 ===== */
+// words-jp.json：{ w: [[日文, 讀音, 級別], …], k: { 中文詞: [w 的索引, …] } }
+const JP = { w: null, k: null, re: null, loading: null };
+const JP_SPAN = 5000;   // 沒有章節的書：每 5000 字重新標一次
 function loadJP() {
-  if (JP.list || JP.loading) return JP.loading;
+  if (JP.re || JP.loading) return JP.loading;
   JP.loading = fetch('words-jp.json').then(r => r.json()).then(j => {
-    JP.list = j.w; JP.map = new Map();
-    j.w.forEach((w, i) => w[5].forEach(k => JP.map.set(k, i)));
-    const keys = [...JP.map.keys()].sort((a, b) => b.length - a.length);
+    JP.w = j.w; JP.k = j.k;
+    const keys = Object.keys(j.k).sort((a, b) => b.length - a.length);
     JP.re = new RegExp(keys.join('|'), 'g');
   }).catch(() => { JP.loading = null; });
   return JP.loading;
 }
-function markJP(line) {
+// 同一個詞在同一章（或同一段 JP_SPAN 字）裡只標第一次；seen 由 buildFlow 傳入、換章時清空
+function markJP(line, seen) {
   if (!db.set.jp || !JP.re) return esc(line);
   let out = '', last = 0, m;
   JP.re.lastIndex = 0;
   while ((m = JP.re.exec(line))) {
-    const i = JP.map.get(m[0]);
-    out += esc(line.slice(last, m.index)) + `<span class="jw${JP.list[i][4] ? ' ff' : ''}" data-w="${i}">${m[0]}</span>`;
+    if (seen.has(m[0])) continue;
+    seen.add(m[0]);
+    out += esc(line.slice(last, m.index)) + `<span class="jw" data-k="${m[0]}">${m[0]}</span>`;
     last = m.index + m[0].length;
   }
   return out + esc(line.slice(last));
@@ -328,13 +331,14 @@ function speakJP(t) {
 function closeWord() { document.querySelectorAll('.wcard').forEach(e => e.remove()); document.querySelectorAll('#flow .jw.on').forEach(e => e.classList.remove('on')); }
 function showWord(el) {
   closeWord();
-  const w = JP.list[+el.dataset.w]; if (!w) return;
-  const [jp, rd, lv, mean, note] = w;
+  const zh = el.dataset.k, ids = JP.k && JP.k[zh]; if (!ids) return;
   el.classList.add('on');
+  const tts = 'speechSynthesis' in window;
   const c = document.createElement('div'); c.className = 'wcard';
-  c.innerHTML = `<div class="wh"><span class="wj">${esc(jp)}</span><span class="wr">${esc(rd)}</span><span class="wl">N${lv}</span></div>
-    <div class="wm">${esc(mean)}</div>${note ? `<div class="wn">⚠ ${esc(note)}</div>` : ''}
-    ${'speechSynthesis' in window ? `<button class="ws" data-act="say" data-t="${esc(rd)}">🔊 聽發音</button>` : ''}`;
+  c.innerHTML = `<div class="wz"><b>${esc(zh)}</b> 的日文</div>` + ids.map(i => {
+    const [jp, rd, lv] = JP.w[i];
+    return `<div class="wh"><span class="wj">${esc(jp)}</span>${rd && rd !== jp ? `<span class="wr">${esc(rd)}</span>` : ''}<span class="wl">N${lv}</span>${tts ? `<button class="ws" data-act="say" data-t="${esc(rd || jp)}" aria-label="聽發音">🔊</button>` : ''}</div>`;
+  }).join('');
   $('#reader').appendChild(c);
   const r = el.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight, ch = c.offsetHeight;
   c.style.left = Math.max(16, Math.min(W - c.offsetWidth - 16, r.left + r.width / 2 - c.offsetWidth / 2)) + 'px';
@@ -344,15 +348,19 @@ function showWord(el) {
 function buildFlow(b) {
   const lines = b.text.replace(/\r\n?/g, '\n').split('\n');
   const out = [`<div class="head"><div class="bt">${esc(b.title)}</div>${b.author ? `<div class="ba">${esc(b.author)}</div>` : ''}<div class="bd"></div></div>`];
-  const chaps = []; let off = 0, blank = 0;
+  const chaps = []; let off = 0, blank = 0, seen = new Set(), seenAt = 0;
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, '');
     if (!line.trim()) { if (++blank === 1) out.push('<p class="gap"></p>'); off += raw.length + 1; continue; }
     blank = 0;
     if (line.trim().length <= 40 && CHAP_RE.test(line)) {
       chaps.push({ o: off, t: line.trim() });
+      seen = new Set(); seenAt = off;
       out.push(`<h2 data-o="${off}">${esc(line.trim())}</h2>`);
-    } else out.push(`<p data-o="${off}">${markJP(line)}</p>`);
+    } else {
+      if (!chaps.length && off - seenAt > JP_SPAN) { seen = new Set(); seenAt = off; }
+      out.push(`<p data-o="${off}">${markJP(line, seen)}</p>`);
+    }
     off += raw.length + 1;
   }
   out.push('<div class="end">— 全書完 —</div>');
