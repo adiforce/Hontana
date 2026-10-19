@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f3ecdd">
+<title>Hontana 本棚</title>
+<style>
+/* ===== 主題 ===== */
+:root {
+  --bg: #f3ecdd; --paper: #f8f2e4; --ink: #2d2722; --sub: #8a7d6b; --line: #e0d5bf;
+  --accent: #a0522d; --bar: rgba(248,242,228,.96); --shadow: 0 1px 2px rgba(60,40,20,.08), 0 4px 14px rgba(60,40,20,.06);
+  --serif: "Songti TC", "Noto Serif TC", "Source Han Serif TC", "PMingLiU", "MingLiU", serif;
+  --sans: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+}
+body[data-theme="white"] { --bg: #ffffff; --paper: #ffffff; --ink: #1f1f1f; --sub: #888; --line: #e6e6e6; --accent: #b5532a; --bar: rgba(255,255,255,.96); }
+body[data-theme="night"] { --bg: #16171a; --paper: #1b1c20; --ink: #c9c4b8; --sub: #7b776e; --line: #2c2d33; --accent: #d08a5c; --bar: rgba(27,28,32,.96); --shadow: none; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); transition: background .2s, color .2s; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+.hide { display: none !important; }
+
+/* ===== 解鎖畫面 ===== */
+#lock { min-height: 100%; display: grid; place-items: center; padding: 24px 16px; }
+.lock-box { width: 100%; max-width: 340px; text-align: center; }
+.logo { font-family: var(--serif); font-size: 40px; letter-spacing: .04em; margin: 0; }
+.logo small { display: block; font-size: 15px; color: var(--sub); letter-spacing: .5em; margin-top: 4px; }
+.shelf-mark { width: 120px; height: 46px; margin: 26px auto 26px; display: flex; align-items: flex-end; gap: 4px; justify-content: center; border-bottom: 3px solid var(--ink); }
+.shelf-mark i { display: block; width: 12px; border-radius: 2px 2px 0 0; background: var(--accent); }
+.shelf-mark i:nth-child(2) { background: var(--sub); }
+.shelf-mark i:nth-child(4) { transform: rotate(14deg); transform-origin: bottom left; background: var(--sub); }
+#pw { width: 100%; font-size: 17px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink); outline: none; text-align: center; letter-spacing: .1em; }
+#pw:focus { border-color: var(--accent); }
+.btn { display: inline-block; padding: 12px 18px; border-radius: 10px; background: var(--ink); color: var(--bg); font-size: 16px; }
+.btn.wide { width: 100%; margin-top: 12px; }
+.btn:disabled { opacity: .5; }
+.msg { min-height: 22px; margin-top: 12px; font-size: 14px; color: var(--accent); }
+
+/* ===== 書庫 ===== */
+#lib { max-width: 720px; margin: 0 auto; padding: 0 16px 40px; }
+.lib-head { display: flex; align-items: baseline; justify-content: space-between; padding: 22px 0 14px; border-bottom: 2px solid var(--ink); }
+.lib-head h1 { font-family: var(--serif); font-size: 28px; margin: 0; }
+.lib-head h1 small { font-size: 14px; color: var(--sub); margin-left: 8px; letter-spacing: .3em; }
+.lib-head .acts { display: flex; gap: 14px; font-size: 14px; color: var(--sub); }
+.cont { margin: 18px 0 6px; padding: 16px; border-radius: 12px; background: var(--paper); box-shadow: var(--shadow); display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; }
+.cont .lbl { font-size: 12px; color: var(--accent); letter-spacing: .15em; }
+.cont .t { font-family: var(--serif); font-size: 19px; margin: 3px 0 4px; }
+.cont .s { font-size: 13px; color: var(--sub); }
+.cont .go { margin-left: auto; font-size: 26px; color: var(--accent); }
+.sec { font-size: 13px; color: var(--sub); margin: 22px 0 6px; letter-spacing: .1em; }
+.book { display: flex; gap: 14px; align-items: center; width: 100%; padding: 14px 2px; border-bottom: 1px solid var(--line); text-align: left; }
+.spine { flex: none; width: 38px; height: 54px; border-radius: 2px 5px 5px 2px; background: var(--c, var(--accent)); box-shadow: inset 4px 0 0 rgba(0,0,0,.18), var(--shadow); display: grid; place-items: center; color: rgba(255,255,255,.92); font-family: var(--serif); font-size: 17px; }
+.book .info { flex: 1; min-width: 0; }
+.book .t { font-family: var(--serif); font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.book .a { font-size: 13px; color: var(--sub); margin-top: 2px; }
+.prog { height: 3px; background: var(--line); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.prog i { display: block; height: 100%; background: var(--accent); }
+.book .pct { flex: none; font-size: 13px; color: var(--sub); width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+.book.bad { opacity: .55; cursor: default; }
+.empty { padding: 40px 10px; text-align: center; color: var(--sub); line-height: 1.9; font-size: 15px; }
+.empty a { color: var(--accent); }
+
+/* ===== 閱讀 ===== */
+#reader { position: fixed; inset: 0; background: var(--paper); overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#vp { position: absolute; overflow: hidden; }
+#flow { height: 100%; column-fill: auto; will-change: transform; font-family: var(--serif); hyphens: auto; }
+#flow.sans { font-family: var(--sans); }
+#flow p { margin: 0; white-space: pre-wrap; word-break: break-word; text-align: justify; }
+#flow p.gap { height: .6em; }
+#flow h2 { font-size: 1.25em; font-weight: 700; margin: .4em 0 1em; line-height: 1.5; break-after: avoid; text-align: left; }
+#flow .head { break-after: column; display: flex; flex-direction: column; justify-content: center; height: 100%; text-align: center; }
+#flow .head .bt { font-size: 1.7em; font-weight: 700; line-height: 1.5; }
+#flow .head .ba { margin-top: 1em; color: var(--sub); }
+#flow .head .bd { width: 40px; height: 2px; background: var(--accent); margin: 1.4em auto 0; }
+#flow .end { break-before: column; height: 100%; display: grid; place-items: center; color: var(--sub); text-align: center; }
+.foot { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 6px); display: flex; justify-content: space-between; padding: 0 20px; font-size: 11px; color: var(--sub); pointer-events: none; font-variant-numeric: tabular-nums; }
+.foot span:first-child { max-width: 60%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.bar { position: absolute; left: 0; right: 0; background: var(--bar); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: transform .2s; z-index: 5; }
+.bar.top { top: 0; padding: calc(env(safe-area-inset-top) + 6px) 8px 6px; display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); }
+.bar.bot { bottom: 0; padding: 12px 18px calc(env(safe-area-inset-bottom) + 12px); border-top: 1px solid var(--line); }
+#reader:not(.ui) .bar.top { transform: translateY(-110%); }
+#reader:not(.ui) .bar.bot { transform: translateY(110%); }
+.bar .ib { min-width: 40px; height: 40px; border-radius: 8px; font-size: 18px; display: grid; place-items: center; padding: 0 8px; }
+.bar .ib:active { background: var(--line); }
+.bar .ttl { flex: 1; min-width: 0; text-align: center; font-family: var(--serif); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slide { display: flex; align-items: center; gap: 12px; }
+.slide input { flex: 1; accent-color: var(--accent); }
+.slide .pn { font-size: 13px; color: var(--sub); min-width: 74px; text-align: right; font-variant-numeric: tabular-nums; }
+.nav2 { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; color: var(--sub); }
+.nav2 button { padding: 6px 4px; }
+
+/* ===== 面板：目錄、字體 ===== */
+.panel { position: absolute; left: 0; right: 0; bottom: 0; max-height: 70%; background: var(--paper); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.12); z-index: 8; display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom); }
+.panel h3 { margin: 0; padding: 16px 20px 10px; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+.panel h3 button { font-size: 14px; color: var(--sub); }
+.toc { overflow-y: auto; padding: 0 8px 12px; }
+.toc button { display: flex; width: 100%; padding: 12px; text-align: left; border-radius: 8px; font-family: var(--serif); font-size: 15px; gap: 10px; }
+.toc button.cur { color: var(--accent); background: var(--bg); }
+.toc button span { margin-left: auto; color: var(--sub); font-size: 12px; font-family: var(--sans); }
+.toc .none { padding: 20px; color: var(--sub); font-size: 14px; text-align: center; }
+.opts { padding: 4px 20px 20px; display: grid; gap: 16px; }
+.row { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.row > label { width: 44px; color: var(--sub); flex: none; }
+.seg { display: flex; flex: 1; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.seg button { flex: 1; padding: 9px 4px; font-size: 14px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--ink); color: var(--paper); }
+.seg .sw { width: 16px; height: 16px; border-radius: 50%; display: inline-block; vertical-align: -3px; margin-right: 4px; border: 1px solid rgba(0,0,0,.2); }
+.shade { position: absolute; inset: 0; z-index: 7; background: rgba(0,0,0,.18); }
+.toast { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 20px; font-size: 14px; z-index: 20; }
+#upd { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 10px); transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.18); white-space: nowrap; }
+#upd button { padding: 5px 10px; border-radius: 7px; font-size: 13px; }
+#upd .y { background: var(--accent); color: #fff; }
+#upd .n { opacity: .7; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--sub); font-size: 14px; background: var(--paper); z-index: 4; }
+</style>
+</head>
+<body data-theme="sepia">
+
+<!-- 新書提示 -->
+<div id="upd" class="hide"><span id="updTxt"></span><button class="y" data-act="updGo">看看</button><button class="n" data-act="updLater">稍後</button></div>
+
+<!-- 解鎖 -->
+<section id="lock" class="hide">
+  <form class="lock-box" id="lockForm" autocomplete="off">
+    <h1 class="logo">Hontana<small>本棚</small></h1>
+    <div class="shelf-mark" aria-hidden="true"><i style="height:38px"></i><i style="height:30px"></i><i style="height:42px"></i><i style="height:34px"></i></div>
+    <input id="pw" type="password" placeholder="輸入密碼" autocomplete="current-password" enterkeyhint="go">
+    <button class="btn wide" id="unlockBtn" type="submit">開啟書庫</button>
+    <div class="msg" id="lockMsg"></div>
+  </form>
+</section>
+
+<!-- 書庫 -->
+<section id="lib" class="hide"></section>
+
+<!-- 閱讀 -->
+<section id="reader" class="hide">
+  <div id="vp"><div id="flow"></div></div>
+  <div class="foot"><span id="fChap"></span><span id="fPage"></span></div>
+  <div class="bar top">
+    <button class="ib" data-act="close" aria-label="回書庫">‹ 書庫</button>
+    <div class="ttl" id="rTitle"></div>
+    <button class="ib" data-act="toc" aria-label="目錄">☰</button>
+    <button class="ib" data-act="opts" aria-label="字體與主題">Aa</button>
+  </div>
+  <div class="bar bot">
+    <div class="slide"><input type="range" id="slider" min="1" max="1" value="1" aria-label="頁數"><span class="pn" id="pn"></span></div>
+    <div class="nav2"><button data-act="prevChap">‹ 上一章</button><button data-act="nextChap">下一章 ›</button></div>
+  </div>
+  <div class="loading hide" id="rLoading">排版中…</div>
+</section>
+
+<script>
+'use strict';
+/* ===== 加密：PBKDF2 推主金鑰 → HKDF 推每本書的 AES-GCM 金鑰（tools.html 用同一套，改這裡要一起改） ===== */
+const APP_SALT = new TextEncoder().encode('hontana.library.v1');
+const ITER = 600000;
+const enc = new TextEncoder(), dec = new TextDecoder();
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+
+async function deriveMaster(pw) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(pw.normalize('NFC')), 'PBKDF2', false, ['deriveBits']);
+  return new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: APP_SALT, iterations: ITER }, base, 256));
+}
+async function bookKey(master, salt) {
+  const h = await crypto.subtle.importKey('raw', master, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt, info: enc.encode('hontana-book') }, h, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+}
+const gunzip = async u8 => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+async function decryptBook(master, f) {
+  const key = await bookKey(master, unb64(f.s));
+  let pt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(f.iv) }, key, unb64(f.ct)));
+  if (f.z) pt = await gunzip(pt);
+  return JSON.parse(dec.decode(pt));
+}
+
+/* ===== 儲存：localStorage hontana.v1（進度、設定），hontana.key（推好的主金鑰） ===== */
+const LS = 'hontana.v1', LS_KEY = 'hontana.key';
+const db = { prog: {}, set: { fs: 19, lh: 1.9, font: 'serif', theme: 'sepia' } };
+try { const s = JSON.parse(localStorage.getItem(LS)); if (s) { Object.assign(db.prog, s.prog); Object.assign(db.set, s.set); } } catch (e) {}
+const save = () => { try { localStorage.setItem(LS, JSON.stringify(db)); } catch (e) {} };
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const show = id => ['lock', 'lib', 'reader'].forEach(x => $('#' + x).classList.toggle('hide', x !== id));
+function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 1800); }
+const applyTheme = () => { document.body.dataset.theme = db.set.theme; document.querySelector('meta[name=theme-color]').content = getComputedStyle(document.body).getPropertyValue('--bg').trim(); };
+
+let master = null;   // Uint8Array
+let books = [];      // { file, id, ok, title, author, text, added }
+
+/* ===== 書庫清單：books/index.json 由 GitHub Actions 產生，只有檔名 ===== */
+async function loadIndex() {
+  const r = await fetch('books/index.json', { cache: 'no-store' });
+  if (r.status === 404) return [];
+  if (!r.ok) throw new Error('讀不到書庫清單（' + r.status + '）');
+  const j = await r.json();
+  return (j.files || []).map(x => typeof x === 'string' ? x : x.file).filter(Boolean);
+}
+async function loadBooks(key) {
+  const files = await loadIndex();
+  return Promise.all(files.map(async file => {
+    const id = file.replace(/\.json$/, '');
+    try {
+      const r = await fetch('books/' + file, { cache: 'no-cache' });
+      if (!r.ok) throw 0;
+      const b = await decryptBook(key, await r.json());
+      return { file, id, ok: true, title: b.title || id, author: b.author || '', text: b.text || '', added: b.added || 0 };
+    } catch (e) { return { file, id, ok: false }; }
+  }));
+}
+
+/* ===== 解鎖 ===== */
+async function unlock(key, fromSaved) {
+  const list = await loadBooks(key);
+  if (list.length && !list.some(b => b.ok)) {
+    if (fromSaved) { localStorage.removeItem(LS_KEY); return false; }
+    throw new Error('密碼不對');
+  }
+  master = key; books = list;
+  try { localStorage.setItem(LS_KEY, b64(key)); } catch (e) {}
+  return true;
+}
+$('#lockForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const pw = $('#pw').value; if (!pw) return;
+  const btn = $('#unlockBtn'), msg = $('#lockMsg');
+  btn.disabled = true; msg.textContent = '解鎖中…';
+  try {
+    await unlock(await deriveMaster(pw));
+    $('#pw').value = ''; msg.textContent = ''; renderLib();
+  } catch (err) { msg.textContent = err.message || '解鎖失敗'; $('#pw').select(); }
+  btn.disabled = false;
+});
+function logout() {
+  if (!confirm('登出後這台裝置要重新輸入密碼，閱讀進度會保留。確定登出？')) return;
+  localStorage.removeItem(LS_KEY); master = null; books = []; show('lock'); $('#pw').focus();
+}
+
+/* ===== 書庫畫面 ===== */
+const SPINES = ['#a0522d', '#5b6e58', '#4a5a78', '#8a5a7a', '#7a6a3a', '#3f6f74', '#8c4a3e', '#5d5470'];
+const spineOf = id => { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) | 0; return SPINES[Math.abs(h) % SPINES.length]; };
+function ago(t) {
+  if (!t) return '';
+  const m = (Date.now() - t) / 60000;
+  if (m < 1) return '剛剛'; if (m < 60) return Math.floor(m) + ' 分鐘前';
+  const h = m / 60; if (h < 24) return Math.floor(h) + ' 小時前';
+  const d = h / 24; if (d < 30) return Math.floor(d) + ' 天前';
+  const dt = new Date(t); return (dt.getMonth() + 1) + '/' + dt.getDate();
+}
+const pctOf = b => { const p = db.prog[b.id]; return p ? Math.round((p.pct || 0) * 100) : 0; };
+function renderLib() {
+  applyTheme();
+  const ok = books.filter(b => b.ok), bad = books.filter(b => !b.ok);
+  ok.sort((a, b) => ((db.prog[b.id] || {}).at || 0) - ((db.prog[a.id] || {}).at || 0) || (b.added - a.added) || a.title.localeCompare(b.title, 'zh-Hant'));
+  const last = ok.find(b => (db.prog[b.id] || {}).at && pctOf(b) < 100) || null;
+  let h = `<div class="lib-head"><h1>Hontana<small>本棚</small></h1><div class="acts"><button data-act="refresh">重新整理</button><button data-act="logout">登出</button></div></div>`;
+  if (last) {
+    h += `<button class="cont" data-act="open" data-id="${esc(last.id)}"><div><div class="lbl">繼續閱讀</div><div class="t">${esc(last.title)}</div><div class="s">讀到 ${pctOf(last)}%・${ago(db.prog[last.id].at)}</div></div><span class="go">›</span></button>`;
+  }
+  if (ok.length) {
+    h += `<div class="sec">全部 ${ok.length} 本</div>`;
+    h += ok.map(b => {
+      const p = pctOf(b), pr = db.prog[b.id];
+      const sub = [b.author, pr && pr.at ? ago(pr.at) + '讀過' : '還沒開始'].filter(Boolean).join('・');
+      return `<button class="book" data-act="open" data-id="${esc(b.id)}"><span class="spine" style="--c:${spineOf(b.id)}">${esc([...b.title][0] || '書')}</span><span class="info"><div class="t">${esc(b.title)}</div><div class="a">${esc(sub)}</div><div class="prog"><i style="width:${p}%"></i></div></span><span class="pct">${pr ? p + '%' : ''}</span></button>`;
+    }).join('');
+  }
+  if (bad.length) {
+    h += `<div class="sec">打不開的檔案（密碼和書庫不同或檔案損壞）</div>` + bad.map(b => `<div class="book bad"><span class="spine" style="--c:#999">🔒</span><span class="info"><div class="t">${esc(b.file)}</div></span></div>`).join('');
+  }
+  if (!books.length) h += `<div class="empty">書庫還是空的。<br>用 <a href="tools.html">加密上架頁</a> 把 txt 轉成加密檔，<br>放進 GitHub 的 <b>books/</b> 資料夾就會出現。</div>`;
+  $('#lib').innerHTML = h;
+  show('lib');
+}
+
+/* ===== 閱讀：CSS 多欄排版，一欄＝一頁，橫移切頁 ===== */
+const R = { book: null, pages: 1, page: 0, stride: 1, paras: [], chaps: [], sig: '' };
+const CHAP_RE = /^\s*(第[\s0-9０-９一二三四五六七八九十百千零〇兩]+[章回節卷部集篇幕話]|序章|序言|序|楔子|引子|前言|尾聲|終章|後記|番外|附錄|Chapter\s*\d+|CHAPTER\s*\d+|Prologue|Epilogue)(\s|$|[：:．.、])/;
+
+function buildFlow(b) {
+  const lines = b.text.replace(/\r\n?/g, '\n').split('\n');
+  const out = [`<div class="head"><div class="bt">${esc(b.title)}</div>${b.author ? `<div class="ba">${esc(b.author)}</div>` : ''}<div class="bd"></div></div>`];
+  const chaps = []; let off = 0, blank = 0;
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/, '');
+    if (!line.trim()) { if (++blank === 1) out.push('<p class="gap"></p>'); off += raw.length + 1; continue; }
+    blank = 0;
+    if (line.trim().length <= 40 && CHAP_RE.test(line)) {
+      chaps.push({ o: off, t: line.trim() });
+      out.push(`<h2 data-o="${off}">${esc(line.trim())}</h2>`);
+    } else out.push(`<p data-o="${off}">${esc(line)}</p>`);
+    off += raw.length + 1;
+  }
+  out.push('<div class="end">— 全書完 —</div>');
+  R.chaps = chaps;
+  return out.join('');
+}
+
+function layout() {
+  const vp = $('#vp'), flow = $('#flow'), s = db.set;
+  const W = window.innerWidth, H = window.innerHeight;
+  const padX = W >= 700 ? Math.round(W * 0.09) : 22;
+  const top = 34, bot = 34;
+  let pw = Math.floor(W - padX * 2), cw = pw, gap = padX * 2;
+  const ph = Math.floor(H - top - bot);
+  if (W >= 900 && W > H) {               // 寬螢幕橫放：左右兩頁一起翻
+    gap = Math.max(48, Math.round(W * 0.06));
+    cw = Math.floor((pw - gap) / 2); pw = cw * 2 + gap;
+  }
+  vp.style.left = Math.round((W - pw) / 2) + 'px'; vp.style.top = top + 'px'; vp.style.width = pw + 'px'; vp.style.height = ph + 'px';
+  flow.style.columnWidth = cw + 'px'; flow.style.columnGap = gap + 'px'; flow.style.width = pw + 'px';
+  flow.style.fontSize = s.fs + 'px'; flow.style.lineHeight = s.lh;
+  flow.classList.toggle('sans', s.font === 'sans');
+  flow.style.transform = 'none';
+  R.stride = pw + gap;
+  R.pages = Math.max(1, Math.round((flow.scrollWidth + gap) / R.stride));
+  R.sig = [pw, cw, ph, s.fs, s.lh, s.font].join('x');
+  $('#slider').max = R.pages;
+}
+// 某段落在第幾頁（0 起算）
+function pageOfEl(el) {
+  const r = el.getClientRects()[0] || el.getBoundingClientRect();
+  const base = $('#flow').getBoundingClientRect().left;
+  return Math.max(0, Math.floor((r.left - base + 2) / R.stride));
+}
+// 第 p 頁開頭那段的字元位置：二分搜尋最後一個「起始頁 ≤ p」的段落
+function offsetAtPage(p) {
+  const a = R.paras; if (!a.length) return 0;
+  let lo = 0, hi = a.length - 1, ans = 0;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (pageOfEl(a[m]) <= p) { ans = m; lo = m + 1; } else hi = m - 1; }
+  return +a[ans].dataset.o;
+}
+function pageAtOffset(o) {
+  const a = R.paras; if (!a.length) return 0;
+  let lo = 0, hi = a.length - 1, ans = 0;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (+a[m].dataset.o <= o) { ans = m; lo = m + 1; } else hi = m - 1; }
+  return pageOfEl(a[ans]);
+}
+function chapAt(o) { let c = null; for (const x of R.chaps) { if (x.o <= o) c = x; else break; } return c; }
+
+function go(p, keep) {
+  R.page = Math.max(0, Math.min(R.pages - 1, p));
+  $('#flow').style.transform = `translateX(${-R.page * R.stride}px)`;
+  const o = R.page === 0 ? 0 : offsetAtPage(R.page);
+  const c = R.page === 0 ? null : chapAt(o);
+  $('#fChap').textContent = c ? c.t : R.book.title;
+  $('#fPage').textContent = (R.page + 1) + ' / ' + R.pages;
+  $('#slider').value = R.page + 1;
+  $('#pn').textContent = `${R.page + 1} / ${R.pages}`;
+  if (!keep) {
+    db.prog[R.book.id] = { o, pct: R.pages > 1 ? R.page / (R.pages - 1) : 1, p: R.page, n: R.pages, sig: R.sig, at: Date.now() };
+    save();
+  }
+}
+function restore() {
+  const pr = db.prog[R.book.id];
+  if (!pr) return go(0, true);
+  if (pr.sig === R.sig && pr.n === R.pages) return go(pr.p, true);   // 同一個排版：回到同一頁
+  go(pr.o ? pageAtOffset(pr.o) : 0, true);                             // 排版不同：依字元位置找回來
+}
+async function relayout() {
+  if (!R.book) return;
+  const pr = db.prog[R.book.id], o = R.page === 0 ? 0 : offsetAtPage(R.page);
+  layout();
+  go(o ? pageAtOffset(o) : 0, !pr);
+}
+
+async function openBook(id) {
+  const b = books.find(x => x.id === id && x.ok); if (!b) return;
+  R.book = b; closePanel();
+  $('#rTitle').textContent = b.title;
+  $('#reader').classList.remove('ui');
+  show('reader');
+  $('#rLoading').classList.remove('hide');
+  await new Promise(r => setTimeout(r, 30));
+  const flow = $('#flow');
+  flow.innerHTML = buildFlow(b);
+  R.paras = [...flow.querySelectorAll('[data-o]')];
+  layout(); restore();
+  $('#rLoading').classList.add('hide');
+}
+function closeBook() { R.book = null; $('#flow').innerHTML = ''; R.paras = []; closePanel(); renderLib(); }
+const next = () => { if (R.page < R.pages - 1) go(R.page + 1); };
+const prev = () => { if (R.page > 0) go(R.page - 1); };
+function jumpChap(dir) {
+  if (!R.chaps.length) return toast('這本書沒有偵測到章節');
+  const o = R.page === 0 ? -1 : offsetAtPage(R.page);
+  const i = R.chaps.findIndex(c => c.o > o);   // 下一章
+  const cur = i === -1 ? R.chaps.length - 1 : i - 1;
+  let t;
+  if (dir > 0) t = i === -1 ? null : R.chaps[i];
+  else { const curP = cur >= 0 ? pageAtOffset(R.chaps[cur].o) : 0; t = R.page > curP ? R.chaps[cur] : R.chaps[cur - 1]; if (!t && R.page > 0) return go(0); }
+  if (!t) return toast(dir > 0 ? '已經是最後一章' : '已經是第一章');
+  go(pageAtOffset(t.o));
+}
+
+/* ===== 面板 ===== */
+function closePanel() { document.querySelectorAll('#reader .panel, #reader .shade').forEach(e => e.remove()); }
+function openPanel(html) {
+  closePanel();
+  const sh = document.createElement('div'); sh.className = 'shade'; sh.dataset.act = 'closePanel';
+  const p = document.createElement('div'); p.className = 'panel'; p.innerHTML = html;
+  $('#reader').append(sh, p); return p;
+}
+function tocPanel() {
+  const o = R.page === 0 ? -1 : offsetAtPage(R.page), cur = chapAt(o);
+  const items = R.chaps.length
+    ? R.chaps.map((c, i) => `<button data-act="toChap" data-i="${i}" class="${c === cur ? 'cur' : ''}">${esc(c.t)}<span>${pageAtOffset(c.o) + 1}</span></button>`).join('')
+    : '<div class="none">這本書沒有偵測到章節標題<br>（「第一章」「第 1 回」「Chapter 1」這類開頭的短行才會被當成章節）</div>';
+  const p = openPanel(`<h3>目錄<button data-act="closePanel">關閉</button></h3><div class="toc">${items}</div>`);
+  const c = p.querySelector('.cur'); if (c) c.scrollIntoView({ block: 'center' });
+}
+function optsPanel() {
+  const s = db.set, on = (k, v) => s[k] === v ? 'on' : '';
+  openPanel(`<h3>字體與主題<button data-act="closePanel">關閉</button></h3><div class="opts">
+    <div class="row"><label>大小</label><div class="seg"><button data-act="fs" data-d="-1">A−</button><button disabled>${s.fs}</button><button data-act="fs" data-d="1">A＋</button></div></div>
+    <div class="row"><label>行距</label><div class="seg">${[1.6, 1.9, 2.2].map((v, i) => `<button class="${on('lh', v)}" data-act="set" data-k="lh" data-v="${v}">${['緊', '中', '鬆'][i]}</button>`).join('')}</div></div>
+    <div class="row"><label>字型</label><div class="seg"><button class="${on('font', 'serif')}" data-act="set" data-k="font" data-v="serif" style="font-family:var(--serif)">明體</button><button class="${on('font', 'sans')}" data-act="set" data-k="font" data-v="sans">黑體</button></div></div>
+    <div class="row"><label>主題</label><div class="seg">${[['sepia', '紙', '#f3ecdd'], ['white', '白', '#fff'], ['night', '夜', '#1b1c20']].map(([k, n, c]) => `<button class="${on('theme', k)}" data-act="set" data-k="theme" data-v="${k}"><i class="sw" style="background:${c}"></i>${n}</button>`).join('')}</div></div>
+  </div>`);
+}
+
+/* ===== 事件 ===== */
+const ACT = {
+  open: d => openBook(d.id),
+  close: closeBook,
+  logout,
+  refresh: async () => { toast('重新整理中…'); try { books = await loadBooks(master); hideUpd(); renderLib(); } catch (e) { toast(e.message); } },
+  updGo: async () => { hideUpd(); try { books = await loadBooks(master); if (R.book) toast('書庫已更新，回書庫就看得到'); else { renderLib(); toast('書庫已更新'); } } catch (e) { toast(e.message); } },
+  updLater: () => { updSkip = updPending; hideUpd(); },
+  toc: tocPanel,
+  opts: optsPanel,
+  closePanel,
+  prevChap: () => jumpChap(-1),
+  nextChap: () => jumpChap(1),
+  toChap: d => { closePanel(); go(pageAtOffset(R.chaps[+d.i].o)); },
+  fs: d => { db.set.fs = Math.max(13, Math.min(32, db.set.fs + +d.d)); save(); relayout(); optsPanel(); },
+  set: d => { db.set[d.k] = d.k === 'lh' ? +d.v : d.v; save(); if (d.k === 'theme') applyTheme(); else relayout(); optsPanel(); },
+};
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
+  const f = ACT[el.dataset.act]; if (f) { e.preventDefault(); f(el.dataset, el); }
+});
+
+// 翻頁：點左側上一頁、右側下一頁、中間叫出選單；左右滑動也可以
+let tp = null;
+$('#vp').parentElement.addEventListener('pointerdown', e => {
+  if (e.target.closest('.bar, .panel, .shade')) return;
+  tp = { x: e.clientX, y: e.clientY, t: Date.now() };
+});
+$('#reader').addEventListener('pointerup', e => {
+  if (!tp || e.target.closest('.bar, .panel, .shade')) { tp = null; return; }
+  const dx = e.clientX - tp.x, dy = e.clientY - tp.y; tp = null;
+  const ui = $('#reader').classList.contains('ui');
+  if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { if (ui) $('#reader').classList.remove('ui'); return dx < 0 ? next() : prev(); }
+  if (Math.abs(dx) > 10 || Math.abs(dy) > 10) return;
+  if (ui) return $('#reader').classList.remove('ui');
+  const x = e.clientX / window.innerWidth;
+  if (x < 0.3) prev(); else if (x > 0.7) next(); else $('#reader').classList.add('ui');
+});
+$('#slider').addEventListener('input', e => { const p = +e.target.value - 1; $('#pn').textContent = `${p + 1} / ${R.pages}`; });
+$('#slider').addEventListener('change', e => go(+e.target.value - 1));
+document.addEventListener('keydown', e => {
+  if (!R.book || $('#reader').classList.contains('hide') || e.target.tagName === 'INPUT') return;
+  if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); next(); }
+  else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); prev(); }
+  else if (e.key === 'Escape') { if (document.querySelector('#reader .panel')) closePanel(); else closeBook(); }
+});
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(relayout, 200); });
+
+/* ===== 新書提示：每 60 秒、切回前景時讀 books/index.json，有沒看過的檔名就跳提示條 ===== */
+let updPending = '', updSkip = '', lastCheck = 0;
+const hideUpd = () => $('#upd').classList.add('hide');
+async function checkNew() {
+  if (!master || document.hidden || Date.now() - lastCheck < 30000) return;
+  lastCheck = Date.now();
+  let files; try { files = await loadIndex(); } catch (e) { return; }
+  const known = new Set(books.map(b => b.file));
+  const fresh = files.filter(f => !known.has(f)).sort();
+  updPending = fresh.join('|');
+  if (!fresh.length || updPending === updSkip) return hideUpd();
+  $('#updTxt').textContent = `📚 書庫多了 ${fresh.length} 本新書`;
+  $('#upd').classList.remove('hide');
+}
+setInterval(checkNew, 60000);
+document.addEventListener('visibilitychange', checkNew);
+
+/* ===== 啟動 ===== */
+(async () => {
+  applyTheme();
+  if (!window.crypto || !crypto.subtle) { show('lock'); $('#lockMsg').textContent = '這個瀏覽器不支援加密功能（需要 https）'; $('#unlockBtn').disabled = true; return; }
+  const saved = localStorage.getItem(LS_KEY);
+  if (saved) {
+    try { if (await unlock(unb64(saved), true)) return renderLib(); } catch (e) { show('lock'); $('#lockMsg').textContent = e.message; return; }
+  }
+  show('lock'); $('#pw').focus();
+})();
+</script>
+</body>
+</html>

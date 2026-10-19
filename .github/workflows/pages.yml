@@ -1,0 +1,50 @@
+# 每次 push 到 main：自動產生 books/index.json（只列檔名，不含書名），再部署 GitHub Pages
+name: Deploy Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 產生書庫清單 books/index.json
+        run: |
+          node -e '
+          const fs = require("fs");
+          const files = fs.existsSync("books") ? fs.readdirSync("books") : [];
+          const list = [];
+          for (const f of files.filter(f => f.endsWith(".json") && f !== "index.json").sort()) {
+            try {
+              const j = JSON.parse(fs.readFileSync("books/" + f, "utf8"));
+              if (!j.ct || !j.iv || !j.s) { console.log("::warning::" + f + " 不是加密書檔，略過"); continue; }
+              list.push({ file: f });
+            } catch (e) { console.log("::warning::" + f + " JSON 格式錯誤"); }
+          }
+          fs.mkdirSync("books", { recursive: true });
+          fs.writeFileSync("books/index.json", JSON.stringify({ updated: new Date().toISOString(), files: list }, null, 2));
+          console.log("共 " + list.length + " 本");
+          '
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4

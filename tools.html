@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hontana 加密上架</title>
+<style>
+:root { --bg: #f3ecdd; --paper: #f8f2e4; --ink: #2d2722; --sub: #8a7d6b; --line: #e0d5bf; --accent: #a0522d; --ok: #4f7a4a; }
+@media (prefers-color-scheme: dark) { :root { --bg: #16171a; --paper: #1f2024; --ink: #d6d1c4; --sub: #8a857b; --line: #33343a; --accent: #d08a5c; --ok: #8fbf86; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+main { max-width: 680px; margin: 0 auto; padding: 24px 16px 60px; }
+h1 { font-family: "Songti TC", "Noto Serif TC", serif; font-size: 24px; margin: 0 0 4px; }
+.lead { color: var(--sub); margin: 0 0 20px; font-size: 14px; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.card h2 { font-size: 15px; margin: 0 0 12px; }
+label { display: block; font-size: 13px; color: var(--sub); margin: 10px 0 4px; }
+input[type=password], input[type=text], select { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 480px) { .two { grid-template-columns: 1fr; } }
+.btn { font: inherit; padding: 11px 18px; border: 0; border-radius: 9px; background: var(--ink); color: var(--bg); cursor: pointer; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.ghost { background: none; color: var(--ink); border: 1px solid var(--line); }
+.note { font-size: 13px; color: var(--sub); margin-top: 8px; }
+.warn { color: var(--accent); }
+.good { color: var(--ok); }
+.file { border-top: 1px solid var(--line); padding: 12px 0; }
+.file:first-child { border-top: 0; }
+.file .meta { font-size: 12px; color: var(--sub); }
+.file pre { white-space: pre-wrap; word-break: break-word; background: var(--bg); border-radius: 8px; padding: 8px 10px; font-size: 13px; max-height: 110px; overflow: hidden; margin: 8px 0 0; font-family: "Songti TC", "Noto Serif TC", serif; }
+.out a { color: var(--accent); }
+ol { padding-left: 20px; margin: 6px 0 0; }
+code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>加密上架</h1>
+  <p class="lead">把 txt 加密成 Hontana 的書檔。整個過程只在這個瀏覽器裡跑，文字和密碼都不會送出去。</p>
+
+  <div class="card">
+    <h2>1. 書庫密碼</h2>
+    <div class="two">
+      <div><label for="pw1">密碼</label><input id="pw1" type="password" autocomplete="new-password"></div>
+      <div><label for="pw2">再輸入一次</label><input id="pw2" type="password" autocomplete="new-password"></div>
+    </div>
+    <div class="note" id="pwNote">所有書都要用同一組密碼，閱讀器才打得開。建議 12 字以上。</div>
+  </div>
+
+  <div class="card">
+    <h2>2. 選 txt 檔（可一次選多本）</h2>
+    <input id="files" type="file" accept=".txt,text/plain" multiple>
+    <div class="two">
+      <div><label for="encSel">文字編碼</label><select id="encSel"><option value="auto">自動判斷（UTF-8／Big5）</option><option value="utf-8">UTF-8</option><option value="big5">Big5（繁中舊檔）</option><option value="gb18030">GBK／GB18030（簡中）</option></select></div>
+      <div><label for="author">作者（全部套用，可留空）</label><input id="author" type="text"></div>
+    </div>
+    <div id="list" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card">
+    <h2>3. 加密並下載</h2>
+    <button class="btn" id="go" disabled>加密</button>
+    <div class="note" id="status"></div>
+    <div class="out" id="out"></div>
+    <div class="note">
+      下載後：
+      <ol>
+        <li>到 GitHub 的 Hontana repo，進 <code>books/</code> 資料夾 → Add file → Upload files，把下載的檔案拖進去 commit。</li>
+        <li>約 1 分鐘後部署完成，閱讀器按「重新整理」就看得到。</li>
+        <li>原本的 txt 不要傳上 GitHub。要下架一本書就刪掉 books/ 裡的那個檔。</li>
+      </ol>
+    </div>
+  </div>
+  <p class="note"><a href="./" style="color:var(--accent)">‹ 回閱讀器</a></p>
+</main>
+
+<script>
+'use strict';
+/* ===== 加密：和 index.html 同一套參數，改一邊要改另一邊 ===== */
+const APP_SALT = new TextEncoder().encode('hontana.library.v1');
+const ITER = 600000;
+const enc = new TextEncoder(), dec = new TextDecoder();
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+async function deriveMaster(pw) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(pw.normalize('NFC')), 'PBKDF2', false, ['deriveBits']);
+  return new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: APP_SALT, iterations: ITER }, base, 256));
+}
+async function bookKey(master, salt, use) {
+  const h = await crypto.subtle.importKey('raw', master, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt, info: enc.encode('hontana-book') }, h, { name: 'AES-GCM', length: 256 }, false, [use]);
+}
+const canZip = typeof CompressionStream === 'function';
+const pipe = async (u8, ts) => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(ts)).arrayBuffer());
+async function encryptBook(master, book) {
+  const s = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  let pt = enc.encode(JSON.stringify(book));
+  if (canZip) pt = await pipe(pt, new CompressionStream('gzip'));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await bookKey(master, s, 'encrypt'), pt));
+  return { v: 1, z: canZip ? 1 : 0, s: b64(s), iv: b64(iv), ct: b64(ct) };
+}
+async function tryDecrypt(master, f) {
+  let pt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(f.iv) }, await bookKey(master, unb64(f.s), 'decrypt'), unb64(f.ct)));
+  if (f.z) pt = await pipe(pt, new DecompressionStream('gzip'));
+  return JSON.parse(dec.decode(pt));
+}
+
+/* ===== 讀 txt：自動判斷 UTF-8／Big5 ===== */
+function decodeText(buf, mode) {
+  const u8 = new Uint8Array(buf);
+  if (mode !== 'auto') return { text: new TextDecoder(mode).decode(u8), used: mode };
+  if (u8[0] === 0xFF && u8[1] === 0xFE) return { text: new TextDecoder('utf-16le').decode(u8), used: 'utf-16le' };
+  if (u8[0] === 0xFE && u8[1] === 0xFF) return { text: new TextDecoder('utf-16be').decode(u8), used: 'utf-16be' };
+  try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(u8), used: 'utf-8' }; }
+  catch (e) { return { text: new TextDecoder('big5').decode(u8), used: 'big5' }; }
+}
+const clean = t => t.replace(/^﻿/, '').replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let items = [];   // { name, title, text, used, size }
+
+async function readFiles() {
+  const fs = [...$('#files').files], mode = $('#encSel').value;
+  items = await Promise.all(fs.map(async f => {
+    const { text, used } = decodeText(await f.arrayBuffer(), mode);
+    return { name: f.name, title: f.name.replace(/\.txt$/i, ''), text: clean(text), used, size: f.size };
+  }));
+  $('#list').innerHTML = items.map((it, i) => `<div class="file">
+    <label for="t${i}">書名</label><input id="t${i}" type="text" value="${esc(it.title)}" data-i="${i}">
+    <div class="meta">${esc(it.name)}・${(it.size / 1024).toFixed(0)} KB・${it.text.length.toLocaleString()} 字・編碼 ${it.used}${/�/.test(it.text.slice(0, 5000)) ? ' <span class="warn">（看起來有亂碼，換個編碼試試）</span>' : ''}</div>
+    <pre>${esc(it.text.slice(0, 260))}</pre></div>`).join('');
+  $('#list').querySelectorAll('input').forEach(inp => inp.addEventListener('input', e => { items[+e.target.dataset.i].title = e.target.value.trim(); }));
+  check();
+}
+function check() {
+  const p1 = $('#pw1').value, p2 = $('#pw2').value;
+  const note = $('#pwNote');
+  if (p1 && p2 && p1 !== p2) { note.innerHTML = '<span class="warn">兩次密碼不一樣</span>'; }
+  else if (p1 && p1.length < 8) { note.innerHTML = '<span class="warn">密碼太短，repo 是公開的，建議 12 字以上</span>'; }
+  else note.textContent = '所有書都要用同一組密碼，閱讀器才打得開。建議 12 字以上。';
+  $('#go').disabled = !(p1 && p1 === p2 && items.length);
+}
+['#pw1', '#pw2'].forEach(s => $(s).addEventListener('input', check));
+$('#files').addEventListener('change', readFiles);
+$('#encSel').addEventListener('change', () => { if ($('#files').files.length) readFiles(); });
+
+// 跟線上書庫比對密碼：解得開任何一本就代表同一組
+async function sameAsLibrary(master) {
+  try {
+    const r = await fetch('books/index.json', { cache: 'no-store' }); if (!r.ok) return null;
+    const files = ((await r.json()).files || []).map(x => typeof x === 'string' ? x : x.file).filter(Boolean);
+    if (!files.length) return null;
+    for (const f of files.slice(0, 3)) {
+      try { const j = await (await fetch('books/' + f, { cache: 'no-cache' })).json(); await tryDecrypt(master, j); return true; } catch (e) {}
+    }
+    return false;
+  } catch (e) { return null; }
+}
+const rid = () => [...crypto.getRandomValues(new Uint8Array(5))].map(b => b.toString(16).padStart(2, '0')).join('');
+
+$('#go').addEventListener('click', async () => {
+  const st = $('#status'), out = $('#out'), btn = $('#go');
+  btn.disabled = true; out.innerHTML = ''; st.textContent = '產生金鑰中…';
+  try {
+    const master = await deriveMaster($('#pw1').value);
+    const same = await sameAsLibrary(master);
+    if (same === false && !confirm('這組密碼解不開線上書庫現有的書。\n用這組密碼上架，閱讀器會打不開這幾本（或打不開舊書）。\n\n確定要繼續？')) { st.textContent = '已取消'; btn.disabled = false; return; }
+    const author = $('#author').value.trim(), links = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      st.textContent = `加密中 ${i + 1} / ${items.length}：${it.title}`;
+      const data = await encryptBook(master, { title: it.title || it.name, author, text: it.text, added: Date.now() });
+      if ((await tryDecrypt(master, data)).text !== it.text) throw new Error('驗證失敗');
+      const name = 'b-' + rid() + '.json';
+      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      links.push(`<div class="file"><a href="${url}" download="${name}">⬇ ${name}</a>　${esc(it.title)}（${(blob.size / 1024).toFixed(0)} KB）</div>`);
+      const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      await new Promise(r => setTimeout(r, 300));
+    }
+    out.innerHTML = links.join('');
+    st.innerHTML = `<span class="good">完成 ${items.length} 本${same === true ? '，密碼和線上書庫相符' : ''}。</span>沒自動下載的話點下面的連結。`;
+  } catch (e) { st.innerHTML = '<span class="warn">失敗：' + esc(e.message || e) + '</span>'; }
+  btn.disabled = false;
+});
+</script>
+</body>
+</html>
