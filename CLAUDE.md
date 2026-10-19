@@ -11,6 +11,7 @@
 index.html                 閱讀器：解鎖 → 書庫 → 分頁閱讀
 tools.html                 加密上架頁：txt → 加密書檔（在瀏覽器裡跑）
 favicon.ico／favicon.svg／apple-touch-icon.png／icon-192.png／icon-512.png  網站 icon（書架上四本書），manifest.webmanifest 給加到主畫面用
+words-jp.json              日文 N5／N4 單字（只收中日意思不同或日文特有的漢字詞），來源見 THIRD_PARTY.md
 books/b-xxxxxxxxxx.json    加密書檔，檔名隨機，看不出書名
 books/index.json           書庫清單，由 GitHub Actions 自動產生（只有檔名），不要提交
 .github/workflows/pages.yml  先產生 books/index.json，再部署 Pages
@@ -36,6 +37,10 @@ books/index.json           書庫清單，由 GitHub Actions 自動產生（只�
 - 操作方式：點畫面左 30% 往前一頁、點右 30% 往後一頁、點中間叫出選單；也可以左右滑動或用方向鍵翻頁。
 
 - 新書提示 `checkNew()`：每 60 秒、切回前景時（間隔至少 30 秒）讀 `books/index.json`，有書庫還沒載入的檔名就跳頂部提示條 `#upd`。「看看」重抓書庫，「稍後」同一批新書不再跳。
+
+- 日文單字標示：開書時 `buildFlow` 每行經過 `markJP()`，用 `words-jp.json` 組成的正規表示式比對，命中的包成 `<span class="jw" data-w=索引>`（有中日意思差異的加 `.ff`，底線較醒目）。點一下 `showWord()` 跳小卡（讀音、級別、中文意思、⚠ 提醒、🔊 用 speechSynthesis ja-JP 唸）。`db.set.jp` 開關，切換時 `rebuild()` 重建內文並保留位置。
+  - `words-jp.json` 格式：`{ w: [[日文寫法, 讀音, 級別(4/5), 中文意思, 提醒, [比對用寫法…]], …] }`。比對用寫法包含日文原寫法和臺灣繁體寫法（例：会社／會社）。
+  - 收詞原則：中日同義的常見詞（時間、問題、世界…）**不收**，避免滿頁底線。
 
 ## 測試
 

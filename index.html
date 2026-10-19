@@ -75,6 +75,17 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 #flow.sans { font-family: var(--sans); }
 #flow p { margin: 0; white-space: pre-wrap; word-break: break-word; text-align: justify; }
 #flow p.gap { height: .6em; }
+#flow .jw { text-decoration: underline dotted color-mix(in srgb, var(--sub) 70%, transparent); text-underline-offset: .28em; text-decoration-thickness: 1.5px; cursor: pointer; }
+#flow .jw.ff { text-decoration: underline dotted var(--accent); text-decoration-thickness: 2px; }
+#flow .jw.on { background: color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 3px; }
+.wcard { position: absolute; z-index: 9; width: min(300px, calc(100vw - 32px)); background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 14px 16px 12px; font-family: var(--sans); user-select: text; -webkit-user-select: text; }
+.wcard .wh { display: flex; align-items: baseline; gap: 10px; }
+.wcard .wj { font-family: "Hiragino Mincho ProN", "Yu Mincho", var(--serif); font-size: 26px; line-height: 1.2; }
+.wcard .wr { color: var(--sub); font-size: 15px; }
+.wcard .wl { margin-left: auto; font-size: 11px; padding: 2px 7px; border-radius: 9px; background: var(--ink); color: var(--paper); letter-spacing: .05em; }
+.wcard .wm { margin-top: 8px; font-size: 16px; }
+.wcard .wn { margin-top: 8px; font-size: 13px; color: var(--accent); line-height: 1.5; }
+.wcard .ws { margin-top: 10px; font-size: 13px; color: var(--sub); padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; }
 #flow h2 { font-size: 1.25em; font-weight: 700; margin: .4em 0 1em; line-height: 1.5; break-after: avoid; text-align: left; }
 #flow .head { break-after: column; display: flex; flex-direction: column; justify-content: center; height: 100%; text-align: center; }
 #flow .head .bt { font-size: 1.7em; font-weight: 700; line-height: 1.5; }
@@ -186,7 +197,7 @@ async function decryptBook(master, f) {
 
 /* ===== 儲存：localStorage hontana.v1（進度、設定），hontana.key（推好的主金鑰） ===== */
 const LS = 'hontana.v1', LS_KEY = 'hontana.key';
-const db = { prog: {}, set: { fs: 19, lh: 1.9, font: 'serif', theme: 'sepia' } };
+const db = { prog: {}, set: { fs: 19, lh: 1.9, font: 'serif', theme: 'sepia', jp: 1 } };
 try { const s = JSON.parse(localStorage.getItem(LS)); if (s) { Object.assign(db.prog, s.prog); Object.assign(db.set, s.set); } } catch (e) {}
 const save = () => { try { localStorage.setItem(LS, JSON.stringify(db)); } catch (e) {} };
 
@@ -288,6 +299,48 @@ function renderLib() {
 const R = { book: null, pages: 1, page: 0, stride: 1, paras: [], chaps: [], sig: '' };
 const CHAP_RE = /^\s*(第[\s0-9０-９一二三四五六七八九十百千零〇兩]+[章回節卷部集篇幕話]|序章|序言|序|楔子|引子|前言|尾聲|終章|後記|番外|附錄|Chapter\s*\d+|CHAPTER\s*\d+|Prologue|Epilogue)(\s|$|[：:．.、])/;
 
+/* ===== 日文單字：N5／N4 和中文同形的詞，標出來點一下看讀音和意思（資料在 words-jp.json，只收中日意思不同或日文特有的詞） ===== */
+const JP = { list: null, re: null, map: null, loading: null };
+function loadJP() {
+  if (JP.list || JP.loading) return JP.loading;
+  JP.loading = fetch('words-jp.json').then(r => r.json()).then(j => {
+    JP.list = j.w; JP.map = new Map();
+    j.w.forEach((w, i) => w[5].forEach(k => JP.map.set(k, i)));
+    const keys = [...JP.map.keys()].sort((a, b) => b.length - a.length);
+    JP.re = new RegExp(keys.join('|'), 'g');
+  }).catch(() => { JP.loading = null; });
+  return JP.loading;
+}
+function markJP(line) {
+  if (!db.set.jp || !JP.re) return esc(line);
+  let out = '', last = 0, m;
+  JP.re.lastIndex = 0;
+  while ((m = JP.re.exec(line))) {
+    const i = JP.map.get(m[0]);
+    out += esc(line.slice(last, m.index)) + `<span class="jw${JP.list[i][4] ? ' ff' : ''}" data-w="${i}">${m[0]}</span>`;
+    last = m.index + m[0].length;
+  }
+  return out + esc(line.slice(last));
+}
+function speakJP(t) {
+  try { const u = new SpeechSynthesisUtterance(t); u.lang = 'ja-JP'; u.rate = .9; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {}
+}
+function closeWord() { document.querySelectorAll('.wcard').forEach(e => e.remove()); document.querySelectorAll('#flow .jw.on').forEach(e => e.classList.remove('on')); }
+function showWord(el) {
+  closeWord();
+  const w = JP.list[+el.dataset.w]; if (!w) return;
+  const [jp, rd, lv, mean, note] = w;
+  el.classList.add('on');
+  const c = document.createElement('div'); c.className = 'wcard';
+  c.innerHTML = `<div class="wh"><span class="wj">${esc(jp)}</span><span class="wr">${esc(rd)}</span><span class="wl">N${lv}</span></div>
+    <div class="wm">${esc(mean)}</div>${note ? `<div class="wn">⚠ ${esc(note)}</div>` : ''}
+    ${'speechSynthesis' in window ? `<button class="ws" data-act="say" data-t="${esc(rd)}">🔊 聽發音</button>` : ''}`;
+  $('#reader').appendChild(c);
+  const r = el.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight, ch = c.offsetHeight;
+  c.style.left = Math.max(16, Math.min(W - c.offsetWidth - 16, r.left + r.width / 2 - c.offsetWidth / 2)) + 'px';
+  c.style.top = (r.bottom + 10 + ch < H - 20 ? r.bottom + 10 : Math.max(10, r.top - ch - 10)) + 'px';
+}
+
 function buildFlow(b) {
   const lines = b.text.replace(/\r\n?/g, '\n').split('\n');
   const out = [`<div class="head"><div class="bt">${esc(b.title)}</div>${b.author ? `<div class="ba">${esc(b.author)}</div>` : ''}<div class="bd"></div></div>`];
@@ -299,7 +352,7 @@ function buildFlow(b) {
     if (line.trim().length <= 40 && CHAP_RE.test(line)) {
       chaps.push({ o: off, t: line.trim() });
       out.push(`<h2 data-o="${off}">${esc(line.trim())}</h2>`);
-    } else out.push(`<p data-o="${off}">${esc(line)}</p>`);
+    } else out.push(`<p data-o="${off}">${markJP(line)}</p>`);
     off += raw.length + 1;
   }
   out.push('<div class="end">— 全書完 —</div>');
@@ -350,6 +403,7 @@ function pageAtOffset(o) {
 function chapAt(o) { let c = null; for (const x of R.chaps) { if (x.o <= o) c = x; else break; } return c; }
 
 function go(p, keep) {
+  closeWord();
   R.page = Math.max(0, Math.min(R.pages - 1, p));
   $('#flow').style.transform = `translateX(${-R.page * R.stride}px)`;
   const o = R.page === 0 ? 0 : offsetAtPage(R.page);
@@ -376,6 +430,17 @@ async function relayout() {
   go(o ? pageAtOffset(o) : 0, !pr);
 }
 
+// 重建內文（開關日文單字標示時），保留目前讀到的位置
+async function rebuild() {
+  if (!R.book) return;
+  const o = R.page === 0 ? 0 : offsetAtPage(R.page);
+  if (db.set.jp) await loadJP();
+  closeWord();
+  $('#flow').innerHTML = buildFlow(R.book);
+  R.paras = [...$('#flow').querySelectorAll('[data-o]')];
+  layout(); go(o ? pageAtOffset(o) : 0, true);
+}
+
 async function openBook(id) {
   const b = books.find(x => x.id === id && x.ok); if (!b) return;
   R.book = b; closePanel();
@@ -384,13 +449,14 @@ async function openBook(id) {
   show('reader');
   $('#rLoading').classList.remove('hide');
   await new Promise(r => setTimeout(r, 30));
+  if (db.set.jp) await loadJP();
   const flow = $('#flow');
   flow.innerHTML = buildFlow(b);
   R.paras = [...flow.querySelectorAll('[data-o]')];
   layout(); restore();
   $('#rLoading').classList.add('hide');
 }
-function closeBook() { R.book = null; $('#flow').innerHTML = ''; R.paras = []; closePanel(); renderLib(); }
+function closeBook() { closeWord(); R.book = null; $('#flow').innerHTML = ''; R.paras = []; closePanel(); renderLib(); }
 const next = () => { if (R.page < R.pages - 1) go(R.page + 1); };
 const prev = () => { if (R.page > 0) go(R.page - 1); };
 function jumpChap(dir) {
@@ -427,6 +493,7 @@ function optsPanel() {
     <div class="row"><label>大小</label><div class="seg"><button data-act="fs" data-d="-1">A−</button><button disabled>${s.fs}</button><button data-act="fs" data-d="1">A＋</button></div></div>
     <div class="row"><label>行距</label><div class="seg">${[1.6, 1.9, 2.2].map((v, i) => `<button class="${on('lh', v)}" data-act="set" data-k="lh" data-v="${v}">${['緊', '中', '鬆'][i]}</button>`).join('')}</div></div>
     <div class="row"><label>字型</label><div class="seg"><button class="${on('font', 'serif')}" data-act="set" data-k="font" data-v="serif" style="font-family:var(--serif)">明體</button><button class="${on('font', 'sans')}" data-act="set" data-k="font" data-v="sans">黑體</button></div></div>
+    <div class="row"><label>日文</label><div class="seg"><button class="${s.jp ? 'on' : ''}" data-act="jp" data-v="1">標 N5／N4 單字</button><button class="${s.jp ? '' : 'on'}" data-act="jp" data-v="0">不標</button></div></div>
     <div class="row"><label>主題</label><div class="seg">${[['sepia', '紙', '#f3ecdd'], ['white', '白', '#fff'], ['night', '夜', '#1b1c20']].map(([k, n, c]) => `<button class="${on('theme', k)}" data-act="set" data-k="theme" data-v="${k}"><i class="sw" style="background:${c}"></i>${n}</button>`).join('')}</div></div>
   </div>`);
 }
@@ -446,6 +513,8 @@ const ACT = {
   nextChap: () => jumpChap(1),
   toChap: d => { closePanel(); go(pageAtOffset(R.chaps[+d.i].o)); },
   fs: d => { db.set.fs = Math.max(13, Math.min(32, db.set.fs + +d.d)); save(); relayout(); optsPanel(); },
+  jp: async d => { db.set.jp = +d.v; save(); await rebuild(); optsPanel(); if (db.set.jp && !JP.re) toast('單字表讀取失敗'); },
+  say: d => speakJP(d.t),
   set: d => { db.set[d.k] = d.k === 'lh' ? +d.v : d.v; save(); if (d.k === 'theme') applyTheme(); else relayout(); optsPanel(); },
 };
 document.addEventListener('click', e => {
@@ -456,15 +525,18 @@ document.addEventListener('click', e => {
 // 翻頁：點左側上一頁、右側下一頁、中間叫出選單；左右滑動也可以
 let tp = null;
 $('#vp').parentElement.addEventListener('pointerdown', e => {
-  if (e.target.closest('.bar, .panel, .shade')) return;
+  if (e.target.closest('.bar, .panel, .shade, .wcard')) return;
   tp = { x: e.clientX, y: e.clientY, t: Date.now() };
 });
 $('#reader').addEventListener('pointerup', e => {
-  if (!tp || e.target.closest('.bar, .panel, .shade')) { tp = null; return; }
+  if (!tp || e.target.closest('.bar, .panel, .shade, .wcard')) { tp = null; return; }
   const dx = e.clientX - tp.x, dy = e.clientY - tp.y; tp = null;
   const ui = $('#reader').classList.contains('ui');
   if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { if (ui) $('#reader').classList.remove('ui'); return dx < 0 ? next() : prev(); }
   if (Math.abs(dx) > 10 || Math.abs(dy) > 10) return;
+  if (document.querySelector('.wcard')) { const w = e.target.closest('.jw'); closeWord(); if (w) showWord(w); return; }
+  const jw = e.target.closest('#flow .jw');
+  if (jw && !ui) return showWord(jw);
   if (ui) return $('#reader').classList.remove('ui');
   const x = e.clientX / window.innerWidth;
   if (x < 0.3) prev(); else if (x > 0.7) next(); else $('#reader').classList.add('ui');
