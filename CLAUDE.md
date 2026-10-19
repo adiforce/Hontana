@@ -10,6 +10,7 @@
 ```
 index.html                 閱讀器：解鎖 → 書庫 → 分頁閱讀
 tools.html                 加密上架頁：txt → 加密書檔（在瀏覽器裡跑）
+favicon.ico／favicon.svg／apple-touch-icon.png／icon-192.png／icon-512.png  網站 icon（書架上四本書），manifest.webmanifest 給加到主畫面用
 books/b-xxxxxxxxxx.json    加密書檔，檔名隨機，看不出書名
 books/index.json           書庫清單，由 GitHub Actions 自動產生（只有檔名），不要提交
 .github/workflows/pages.yml  先產生 books/index.json，再部署 Pages
