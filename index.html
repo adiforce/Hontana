@@ -86,6 +86,12 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .wcard .wl { margin-left: auto; flex: none; font-size: 11px; padding: 2px 7px; border-radius: 9px; background: var(--ink); color: var(--paper); letter-spacing: .05em; }
 .wcard .wz { font-size: 13px; color: var(--sub); margin-bottom: 6px; }
 .wcard .wz b { color: var(--ink); font-family: var(--serif); font-size: 15px; }
+#flow .jg { position: relative; display: inline-block; width: 1.5em; height: 1.5em; margin: 0 .1em 0 .05em; font: 600 .5em/1.42em var(--sans); text-align: center; text-indent: 0; vertical-align: .95em; color: var(--sub); border: 1px solid color-mix(in srgb, var(--sub) 70%, transparent); border-radius: 50%; cursor: pointer; user-select: none; -webkit-user-select: none; }
+#flow .jg::after { content: ''; position: absolute; inset: -12px; }   /* 圓圈很小，點的範圍放大 */
+#flow .jg.on { color: var(--paper); background: var(--accent); border-color: var(--accent); }
+.wcard .wg { font-size: 22px; }
+.wcard .we { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font-family: "Hiragino Mincho ProN", "Yu Mincho", var(--serif); font-size: 15px; line-height: 1.5; }
+.wcard .we span { flex: 1; }
 .wcard .wm { margin-top: 4px; font-family: var(--serif); font-size: 16px; line-height: 1.5; }
 .wcard .wm + .wh, .wcard .wh + .wh { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .wcard .ws { flex: none; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); font-size: 15px; }
@@ -203,7 +209,7 @@ async function decryptBook(master, f) {
 
 /* ===== 儲存：localStorage hontana.v1（進度、設定），hontana.key（推好的主金鑰） ===== */
 const LS = 'hontana.v1', LS_KEY = 'hontana.key';
-const db = { prog: {}, set: { fs: 19, lh: 1.9, font: 'serif', theme: 'sepia', jp: 1 } };
+const db = { prog: {}, set: { fs: 19, lh: 1.9, font: 'serif', theme: 'sepia', jp: 1, jg: 1 } };
 try { const s = JSON.parse(localStorage.getItem(LS)); if (s) { Object.assign(db.prog, s.prog); Object.assign(db.set, s.set); } } catch (e) {}
 const save = () => { try { localStorage.setItem(LS, JSON.stringify(db)); } catch (e) {} };
 
@@ -414,27 +420,78 @@ function jaOk(t, i, f) {
   if (/^[ァ-ヺー]+$/.test(f)) return !isKata(p) && !isKata(n);
   return true;
 }
+// 日文書：單字畫虛線、文法在句型後面加一個小「文」；兩個各自開關（db.set.jp／db.set.jg）
 function markJA(line, seen) {
-  const idx = jaIndex();
-  let out = '', last = 0, i = 0;
-  while (i < line.length) {
+  const idx = db.set.jp && JP.w ? jaIndex() : null;
+  const marks = db.set.jg && GR.g ? grMarks(line, seen) : [];   // [[位置, html], …]，依位置排好
+  let out = '', last = 0, i = 0, mi = 0;
+  const emit = to => {   // 輸出 last～to 的文字，途中遇到文法標記就插進去
+    for (; mi < marks.length && marks[mi][0] <= to; mi++) { out += esc(line.slice(last, marks[mi][0])) + marks[mi][1]; last = marks[mi][0]; }
+    out += esc(line.slice(last, to)); last = to;
+  };
+  while (idx && i < line.length) {
     const hit = (idx.get(line[i]) || []).find(([f]) => line.startsWith(f, i) && jaOk(line, i, f));
     if (!hit) { i++; continue; }
     const [f, ids] = hit;
     if (!seen.has(ids)) {   // 同一個詞（不管哪種活用）每章只標一次
       seen.add(ids);
-      out += esc(line.slice(last, i)) + `<span class="jw" data-w="${ids}">${esc(f)}</span>`;
+      emit(i);
+      out += `<span class="jw" data-w="${ids}">${esc(f)}</span>`;
       last = i + f.length;
+      for (; mi < marks.length && marks[mi][0] <= last; mi++) out += marks[mi][1];   // 落在單字中間的文法標記移到單字後面
     }
     i += f.length;
   }
-  return out + esc(line.slice(last));
+  emit(line.length);
+  return out;
+}
+
+/* ===== 日文書的文法：grammar-jp.json，N5／N4 句型，點「文」看說明 ===== */
+// grammar-jp.json：{ g: [[句型, 級別, 中文說明, 例句, 正規表示式, 標記要不要延到活用語尾(1/0)], …] }，排在前面的優先
+const GR = { g: null, re: null, loading: null };
+const GR_TAIL = /^(?:ませんでした|ましょう|ません|ました|ます|でした|です|なかった|ない|った|て|た|だ|る|り|っ|い)*/;
+function loadGR() {
+  if (GR.g || GR.loading) return GR.loading;
+  GR.loading = fetch('grammar-jp.json').then(r => r.json()).then(j => {
+    GR.re = j.g.map(g => { try { return new RegExp(g[4], 'g'); } catch (e) { return null; } });   // 舊瀏覽器不支援某條（例如 lookbehind）就跳過那條
+    GR.g = j.g;
+  }).catch(() => { GR.loading = null; });
+  return GR.loading;
+}
+// 找出這行的句型：先比的優先，重疊的不再比；同一個句型每章只標一次
+function grMarks(line, seen) {
+  const taken = [], res = [];
+  GR.g.forEach((g, id) => {
+    const re = GR.re[id]; if (!re) return;
+    re.lastIndex = 0; let m;
+    while ((m = re.exec(line))) {
+      if (!m[0]) { re.lastIndex++; continue; }
+      const a = m.index; let b = a + m[0].length;
+      if (taken.some(([x, y]) => a < y && b > x)) continue;
+      taken.push([a, b]);
+      if (seen.has('g' + id)) continue;
+      seen.add('g' + id);
+      if (g[5]) b += GR_TAIL.exec(line.slice(b))[0].length;   // 「なりません」整個後面才放標記
+      res.push([b, `<sup class="jg" data-g="${id}">文</sup>`]);
+    }
+  });
+  return res.sort((x, y) => x[0] - y[0]);
+}
+function showGrammar(el) {
+  closeWord();
+  const g = GR.g && GR.g[+el.dataset.g]; if (!g) return;
+  el.classList.add('on');
+  const tts = 'speechSynthesis' in window;
+  const c = document.createElement('div'); c.className = 'wcard';
+  c.innerHTML = `<div class="wz"><b>文法</b></div><div class="wh"><span class="wj wg">${esc(g[0])}</span><span class="wl">N${g[1]}</span></div><div class="wm">${esc(g[2])}</div>`
+    + `<div class="we"><span>${esc(g[3])}</span>${tts ? `<button class="ws" data-act="say" data-t="${esc(g[3])}" aria-label="聽例句">🔊</button>` : ''}</div>`;
+  placeCard(c, el);
 }
 
 // 同一個詞在同一章（或同一段 JP_SPAN 字）裡只標第一次；seen 由 buildFlow 傳入、換章時清空
 function markJP(line, seen) {
+  if (R.ja) return (db.set.jp && JP.w) || (db.set.jg && GR.g) ? markJA(line, seen) : esc(line);
   if (!db.set.jp || !JP.re) return esc(line);
-  if (R.ja) return markJA(line, seen);
   let out = '', last = 0, m;
   JP.re.lastIndex = 0;
   while ((m = JP.re.exec(line))) {
@@ -448,7 +505,7 @@ function markJP(line, seen) {
 function speakJP(t) {
   try { const u = new SpeechSynthesisUtterance(t); u.lang = 'ja-JP'; u.rate = .9; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {}
 }
-function closeWord() { document.querySelectorAll('.wcard').forEach(e => e.remove()); document.querySelectorAll('#flow .jw.on').forEach(e => e.classList.remove('on')); }
+function closeWord() { document.querySelectorAll('.wcard').forEach(e => e.remove()); document.querySelectorAll('#flow .jw.on, #flow .jg.on').forEach(e => e.classList.remove('on')); }
 function showWord(el) {
   closeWord();
   const ja = el.dataset.w != null, zh = el.dataset.k;
@@ -462,6 +519,10 @@ function showWord(el) {
     return `<div class="wh"><span class="wj">${esc(jp)}</span>${rd && rd !== jp ? `<span class="wr">${esc(rd)}</span>` : ''}<span class="wl">N${lv}</span>${tts ? `<button class="ws" data-act="say" data-t="${esc(rd || jp)}" aria-label="聽發音">🔊</button>` : ''}</div>`
       + (ja ? `<div class="wm">${esc(JP.zh[i].join('、'))}</div>` : '');
   }).join('');
+  placeCard(c, el);
+}
+// 小卡放在點到的字下方，放不下就放上方
+function placeCard(c, el) {
   $('#reader').appendChild(c);
   const r = el.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight, ch = c.offsetHeight;
   c.style.left = Math.max(16, Math.min(W - c.offsetWidth - 16, r.left + r.width / 2 - c.offsetWidth / 2)) + 'px';
@@ -472,7 +533,6 @@ function buildFlow(b) {
   const lines = b.text.replace(/\r\n?/g, '\n').split('\n');
   const out = [`<div class="head"><div class="bt">${esc(b.title)}</div>${b.author ? `<div class="ba">${esc(b.author)}</div>` : ''}<div class="bd"></div></div>`];
   const chaps = []; let off = 0, blank = 0, seen = new Set(), seenAt = 0, fmt = [];
-  R.ja = isJaText(b.text);   // 日文書改成標日文詞、顯示中文意思
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, '');
     if (!line.trim()) { if (++blank === 1) out.push('<p class="gap"></p>'); off += raw.length + 1; continue; }
@@ -567,11 +627,16 @@ async function relayout() {
   go(o ? pageAtOffset(o) : 0, !pr);
 }
 
-// 重建內文（開關日文單字標示時），保留目前讀到的位置
+// 判斷是不是日文書（日文書改成標日文詞、顯示中文意思，另外可以標文法），再載入需要的資料
+async function loadLang(b) {
+  R.ja = isJaText(b.text);
+  await Promise.all([(db.set.jp || (R.ja && db.set.jg)) && loadJP(), R.ja && db.set.jg && loadGR()]);
+}
+// 重建內文（開關日文單字、文法標示時），保留目前讀到的位置
 async function rebuild() {
   if (!R.book) return;
   const o = R.page === 0 ? 0 : offsetAtPage(R.page);
-  if (db.set.jp) await loadJP();
+  await loadLang(R.book);
   closeWord();
   $('#flow').innerHTML = buildFlow(R.book);
   R.paras = [...$('#flow').querySelectorAll('[data-o]')];
@@ -586,7 +651,7 @@ async function openBook(id) {
   show('reader');
   $('#rLoading').classList.remove('hide');
   await new Promise(r => setTimeout(r, 30));
-  if (db.set.jp) await loadJP();
+  await loadLang(b);
   const flow = $('#flow');
   flow.innerHTML = buildFlow(b);
   R.paras = [...flow.querySelectorAll('[data-o]')];
@@ -631,6 +696,7 @@ function optsPanel() {
     <div class="row"><label>行距</label><div class="seg">${[1.6, 1.9, 2.2].map((v, i) => `<button class="${on('lh', v)}" data-act="set" data-k="lh" data-v="${v}">${['緊', '中', '鬆'][i]}</button>`).join('')}</div></div>
     <div class="row"><label>字型</label><div class="seg"><button class="${on('font', 'serif')}" data-act="set" data-k="font" data-v="serif" style="font-family:var(--serif)">明體</button><button class="${on('font', 'sans')}" data-act="set" data-k="font" data-v="sans">黑體</button></div></div>
     <div class="row"><label>日文</label><div class="seg"><button class="${s.jp ? 'on' : ''}" data-act="jp" data-v="1">標 N5／N4 單字</button><button class="${s.jp ? '' : 'on'}" data-act="jp" data-v="0">不標</button></div></div>
+    ${R.ja ? `<div class="row"><label>文法</label><div class="seg"><button class="${s.jg ? 'on' : ''}" data-act="jg" data-v="1">標 N5／N4 文法</button><button class="${s.jg ? '' : 'on'}" data-act="jg" data-v="0">不標</button></div></div>` : ''}
     <div class="row"><label>主題</label><div class="seg">${[['sepia', '紙', '#f3ecdd'], ['white', '白', '#fff'], ['night', '夜', '#1b1c20']].map(([k, n, c]) => `<button class="${on('theme', k)}" data-act="set" data-k="theme" data-v="${k}"><i class="sw" style="background:${c}"></i>${n}</button>`).join('')}</div></div>
   </div>`);
 }
@@ -651,6 +717,7 @@ const ACT = {
   toChap: d => { closePanel(); go(pageAtOffset(R.chaps[+d.i].o)); },
   fs: d => { db.set.fs = Math.max(13, Math.min(32, db.set.fs + +d.d)); save(); relayout(); optsPanel(); },
   jp: async d => { db.set.jp = +d.v; save(); await rebuild(); optsPanel(); if (db.set.jp && !JP.re) toast('單字表讀取失敗'); },
+  jg: async d => { db.set.jg = +d.v; save(); await rebuild(); optsPanel(); if (db.set.jg && !GR.g) toast('文法表讀取失敗'); },
   say: d => speakJP(d.t),
   set: d => { db.set[d.k] = d.k === 'lh' ? +d.v : d.v; save(); if (d.k === 'theme') applyTheme(); else relayout(); optsPanel(); },
 };
@@ -671,8 +738,9 @@ $('#reader').addEventListener('pointerup', e => {
   const ui = $('#reader').classList.contains('ui');
   if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { if (ui) $('#reader').classList.remove('ui'); return dx < 0 ? next() : prev(); }
   if (Math.abs(dx) > 10 || Math.abs(dy) > 10) return;
-  if (document.querySelector('.wcard')) { const w = e.target.closest('.jw'); closeWord(); if (w) showWord(w); return; }
-  const jw = e.target.closest('#flow .jw');
+  const jg = e.target.closest('#flow .jg'), jw = !jg && e.target.closest('#flow .jw');
+  if (document.querySelector('.wcard')) { closeWord(); if (jg) showGrammar(jg); else if (jw) showWord(jw); return; }
+  if (jg && !ui) return showGrammar(jg);
   if (jw && !ui) return showWord(jw);
   if (ui) return $('#reader').classList.remove('ui');
   const x = e.clientX / window.innerWidth;
