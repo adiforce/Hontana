@@ -32,6 +32,9 @@ books/index.json           書庫清單，由 GitHub Actions 自動產生（只�
 - 排版用 CSS 多欄：`#flow` 設定 `column-width` 等於版面寬，一欄就是一頁，換頁時用 `translateX(-頁 × stride)` 平移。
 - 每一行都會變成 `<p data-o=字元位置>`，章節標題（符合 `CHAP_RE` 且長度在 40 字以內的行）會變成 `<h2>`。
 - 強制換頁：整行只有 `==nextpage==`（符合 `PB_RE`，不分大小寫、前後空白不計）會變成 `<div class="pb">`（`break-before: column`），這行本身不顯示，緊接的空行也不補空白。兩頁並排時是換到下一欄，不是下一組兩頁。
+- 文字標記（`renderLine` 處理，`FMT_RE`）：`==font-1==…==/font-1==` 字級四級（.f1 1.6em／.f2 1.3em／.f3 原本／.f4 .85em）、`==bold==`、`==italic==`、`==underline==`（實線，和日文單字的虛線分開）、`==color-red==…==/color==`（red／orange／yellow／green／blue／purple／gray 走 `--c-*` 變數，夜間主題有亮色版；也可寫 `#rgb`／`#rrggbb`，夜間不會調整）。
+  - 結尾寫 `==/種類==`，`==/font==`、`==/color==` 也算。可以疊用、可以跨行（`fmt` 堆疊跨行沿用，每行頭尾重開重關 span）；只有標記的行不佔一行；遇到章節標題自動全部結束。沒開過的結尾直接隱藏；不認得的標記照原文顯示。
+  - 判斷空行、章節標題都用去掉標記後的文字。標記中間的文字才會送進 `markJP`，所以被標記切開的詞不會標日文單字。
 - 進度存在 localStorage 的 `hontana.v1` → `prog[書id] = { o 字元位置, pct, p 頁, n 總頁數, sig 排版簽名, at }`。
   - 還原時，如果 `sig` 和總頁數都沒變，直接回到同一頁；有變（換了裝置、字級或旋轉螢幕）就用 `o` 重新找出對應的頁。
 - 設定存在 `hontana.v1.set`，包括字級 `fs`、行距 `lh`、字型 `font`（serif／sans）、主題 `theme`（sepia／white／night）。

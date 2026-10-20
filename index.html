@@ -21,6 +21,8 @@
   --sans: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
 }
 body[data-theme="white"] { --bg: #ffffff; --paper: #ffffff; --ink: #1f1f1f; --sub: #888; --line: #e6e6e6; --accent: #b5532a; --bar: rgba(255,255,255,.96); }
+body { --c-red: #c0392b; --c-orange: #d35400; --c-yellow: #b7950b; --c-green: #2e8b57; --c-blue: #2e6fb7; --c-purple: #8e44ad; --c-gray: #8a8a8a; }
+body[data-theme="night"] { --c-red: #f07b6c; --c-orange: #f0a35e; --c-yellow: #e8cf5a; --c-green: #6fcf97; --c-blue: #7fb2f0; --c-purple: #c79be6; --c-gray: #9a978f; }
 body[data-theme="night"] { --bg: #16171a; --paper: #1b1c20; --ink: #c9c4b8; --sub: #7b776e; --line: #2c2d33; --accent: #d08a5c; --bar: rgba(27,28,32,.96); --shadow: none; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; }
@@ -91,6 +93,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 #flow .head .bt { font-size: 1.7em; font-weight: 700; line-height: 1.5; }
 #flow .head .ba { margin-top: 1em; color: var(--sub); }
 #flow .head .bd { width: 40px; height: 2px; background: var(--accent); margin: 1.4em auto 0; }
+#flow .f1 { font-size: 1.6em; } #flow .f2 { font-size: 1.3em; } #flow .f3 { font-size: 1em; } #flow .f4 { font-size: .85em; }
+#flow .fb { font-weight: 700; } #flow .fi { font-style: italic; } #flow .fu { text-decoration: underline solid; text-underline-offset: .2em; text-decoration-thickness: 1px; }
 #flow .pb { break-before: column; height: 0; }
 #flow .end { break-before: column; height: 100%; display: grid; place-items: center; color: var(--sub); text-align: center; }
 .foot { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 6px); display: flex; justify-content: space-between; padding: 0 20px; font-size: 11px; color: var(--sub); pointer-events: none; font-variant-numeric: tabular-nums; }
@@ -305,6 +309,33 @@ const CHAP_RE = /^\s*(第[\s0-9０-９一二三四五六七八九十百千零〇
 const JP = { w: null, k: null, re: null, loading: null };
 const PB_RE = /^\s*==nextpage==\s*$/i;   // 整行只有 ==nextpage== 就強制換頁
 const JP_SPAN = 5000;   // 沒有章節的書：每 5000 字重新標一次
+// 文字標記：==font-1==…==/font-1==（1 最大、3 原本、4 小）、==bold==、==italic==、==underline==、==color-red==…==/color==
+const FMT_RE = /==(\/?)(font-([1-4])|font|bold|italic|underline|color(?:-(red|orange|yellow|green|blue|purple|gray|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}))?)==/g;
+const FMT_COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'gray'];
+function fmtOpen(t) { return t.style ? `<span style="color:${t.style}">` : `<span class="${t.cls}">`; }
+// 把一行切成「文字」和「標記」，文字交給 jp 處理；fmt 是跨行沿用的開啟中標記
+function renderLine(line, fmt, jp) {
+  let out = fmt.map(fmtOpen).join(''), last = 0, m;
+  FMT_RE.lastIndex = 0;
+  while ((m = FMT_RE.exec(line))) {
+    const [, close, name, n, col] = m, kind = name.startsWith('font') ? 'font' : name.startsWith('color') ? 'color' : name;
+    if (!close && ((kind === 'font' && !n) || (kind === 'color' && !col))) continue;  // ==font== ==color== 只能用在結尾，開頭照原文顯示
+    out += jp(line.slice(last, m.index)); last = m.index + m[0].length;
+    if (close) {
+      let i = fmt.length - 1; while (i >= 0 && fmt[i].kind !== kind) i--;
+      if (i < 0) continue;  // 沒開過的結尾：隱藏就好
+      const above = fmt.slice(i + 1);
+      out += '</span>'.repeat(fmt.length - i) + above.map(fmtOpen).join('');
+      fmt.splice(i, 1);
+    } else {
+      const t = kind === 'font' ? { kind, cls: 'f' + n } : kind === 'color'
+        ? (FMT_COLORS.includes(col) ? { kind, style: `var(--c-${col})` } : { kind, style: col })
+        : { kind, cls: { bold: 'fb', italic: 'fi', underline: 'fu' }[kind] };
+      fmt.push(t); out += fmtOpen(t);
+    }
+  }
+  return out + jp(line.slice(last)) + '</span>'.repeat(fmt.length);
+}
 function loadJP() {
   if (JP.re || JP.loading) return JP.loading;
   JP.loading = fetch('words-jp.json').then(r => r.json()).then(j => {
@@ -350,19 +381,23 @@ function showWord(el) {
 function buildFlow(b) {
   const lines = b.text.replace(/\r\n?/g, '\n').split('\n');
   const out = [`<div class="head"><div class="bt">${esc(b.title)}</div>${b.author ? `<div class="ba">${esc(b.author)}</div>` : ''}<div class="bd"></div></div>`];
-  const chaps = []; let off = 0, blank = 0, seen = new Set(), seenAt = 0;
+  const chaps = []; let off = 0, blank = 0, seen = new Set(), seenAt = 0, fmt = [];
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, '');
     if (!line.trim()) { if (++blank === 1) out.push('<p class="gap"></p>'); off += raw.length + 1; continue; }
     if (PB_RE.test(line)) { out.push('<div class="pb"></div>'); blank = 1; off += raw.length + 1; continue; }  // 強制換頁，後面的空行不再補空白
+    const plain = line.replace(FMT_RE, '');
+    if (!plain.trim()) { renderLine(line, fmt, esc); off += raw.length + 1; continue; }  // 只有標記的行：記下開關，不佔一行
     blank = 0;
-    if (line.trim().length <= 40 && CHAP_RE.test(line)) {
-      chaps.push({ o: off, t: line.trim() });
+    if (plain.trim().length <= 40 && CHAP_RE.test(plain)) {
+      fmt = [];  // 忘了寫結尾的標記到章節標題為止
+      chaps.push({ o: off, t: plain.trim() });
       seen = new Set(); seenAt = off;
-      out.push(`<h2 data-o="${off}">${esc(line.trim())}</h2>`);
+      out.push(`<h2 data-o="${off}">${renderLine(line.trim(), fmt, esc)}</h2>`);
+      fmt = [];
     } else {
       if (!chaps.length && off - seenAt > JP_SPAN) { seen = new Set(); seenAt = off; }
-      out.push(`<p data-o="${off}">${markJP(line, seen)}</p>`);
+      out.push(`<p data-o="${off}">${renderLine(line, fmt, t => markJP(t, seen))}</p>`);
     }
     off += raw.length + 1;
   }
