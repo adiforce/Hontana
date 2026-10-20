@@ -86,7 +86,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .wcard .wl { margin-left: auto; flex: none; font-size: 11px; padding: 2px 7px; border-radius: 9px; background: var(--ink); color: var(--paper); letter-spacing: .05em; }
 .wcard .wz { font-size: 13px; color: var(--sub); margin-bottom: 6px; }
 .wcard .wz b { color: var(--ink); font-family: var(--serif); font-size: 15px; }
-.wcard .wh + .wh { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.wcard .wm { margin-top: 4px; font-family: var(--serif); font-size: 16px; line-height: 1.5; }
+.wcard .wm + .wh, .wcard .wh + .wh { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .wcard .ws { flex: none; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); font-size: 15px; }
 #flow h2 { font-size: 1.25em; font-weight: 700; margin: .4em 0 1em; line-height: 1.5; break-after: avoid; text-align: left; }
 #flow .head { break-after: column; display: flex; flex-direction: column; justify-content: center; height: 100%; text-align: center; }
@@ -302,7 +303,7 @@ function renderLib() {
 
 /* ===== 閱讀：CSS 多欄排版，一欄＝一頁，橫移切頁 ===== */
 const R = { book: null, pages: 1, page: 0, stride: 1, paras: [], chaps: [], sig: '' };
-const CHAP_RE = /^\s*(第[\s0-9０-９一二三四五六七八九十百千零〇兩]+[章回節卷部集篇幕話]|序章|序言|序|楔子|引子|前言|尾聲|終章|後記|番外|附錄|Chapter\s*\d+|CHAPTER\s*\d+|Prologue|Epilogue)(\s|$|[：:．.、])/;
+const CHAP_RE = /^\s*(第[\s0-9０-９一二三四五六七八九十百千零〇兩]+[章回節卷部集篇幕話]|序章|序言|序|楔子|引子|前言|尾聲|終章|後記|番外|附錄|Chapter\s*\d+|CHAPTER\s*\d+|Prologue|Epilogue|プロローグ|エピローグ|あとがき)(\s|$|[：:．.、])/;
 
 /* ===== 日文單字：中文詞對到 JLPT N5／N4 的日文說法（資料在 words-jp.json），點一下看日文寫法、讀音 ===== */
 // words-jp.json：{ w: [[日文, 讀音, 級別], …], k: { 中文詞: [w 的索引, …] } }
@@ -342,12 +343,98 @@ function loadJP() {
     JP.w = j.w; JP.k = j.k;
     const keys = Object.keys(j.k).sort((a, b) => b.length - a.length);
     JP.re = new RegExp(keys.join('|'), 'g');
+    JP.zh = j.w.map(() => []);   // 反查：日文（w 的索引）→ 中文詞，給日文書用
+    for (const [zh, ids] of Object.entries(j.k)) for (const i of ids) JP.zh[i].push(zh);
   }).catch(() => { JP.loading = null; });
   return JP.loading;
 }
+
+/* ===== 日文書：反過來標出 N5／N4 的日文詞，點一下看中文意思 ===== */
+// 假名占比夠高就當日文書（中文書幾乎沒有假名）
+function isJaText(t) {
+  const s = t.slice(0, 20000);
+  const kana = (s.match(/[ぁ-ゖァ-ヺ]/g) || []).length, han = (s.match(/[一-鿿]/g) || []).length;
+  return kana >= 50 && kana > (kana + han) * 0.15;
+}
+const JA_FIX = { '終る': '終わる', '曲る': '曲がる', '落る': '落ちる', '楽む': '楽しむ', '落す': '落とす', '下る': '下がる' };  // 詞表的寫法 → 書裡常見的寫法（兩種都比對）
+const JA_KANA = ['美味しい', '可愛い', '凄い', '分かる', '無くす', '無くなる', '嬉しい', '面白い', '易しい', '優しい', '止める', '頑張る', '素晴らしい', '怖い', '汚い', '欲しい'];  // 書裡常寫成假名，讀音也拿來比對
+const JA_NOT_V = new Set(['いくつ', 'いつ', '近く', '遠く', 'どう', 'まっすぐ', 'もう', 'よく', 'とうとう', 'なるべく', 'ぶどう', 'しばらく', 'もうすぐ', 'ごちそう', '向こう']);  // う段結尾但不是動詞
+const JA_NOT_A = new Set(['嫌い', 'お手洗い', '匂い', 'お祝い', 'お見舞い']);  // い結尾但不是い形容詞
+const JA_GODAN_RU = new Set(['要る', '帰る', '知る', '入る', '走る', '滑る']);  // 看讀音像一段、其實是五段
+const JA_ROW = { う: 'わいうえお', く: 'かきくけこ', ぐ: 'がぎぐげご', す: 'さしすせそ', つ: 'たちつてと', ぬ: 'なにぬねの', ぶ: 'ばびぶべぼ', む: 'まみむめも', る: 'らりるれろ' };
+const JA_TE = { う: 'っ', つ: 'っ', る: 'っ', く: 'い', ぐ: 'い', す: 'し', ぬ: 'ん', ぶ: 'ん', む: 'ん' };
+const jaAdd = (s, a) => a.map(x => s + x);
+// 辭書形展開成常見活用形；rd 是讀音，用來判斷一段／五段
+function jaForms(b, rd) {
+  const e = b.slice(-1), s = b.slice(0, -1);
+  if (b.length > 2 && b.endsWith('する'))
+    return jaAdd(b.slice(0, -2), ['する', 'した', 'して', 'します', 'しました', 'しません', 'しない', 'しなかった', 'すれば', 'しよう', 'したい', 'しましょう', 'しながら', 'させる', 'される']);
+  if (JA_ROW[e] && !JA_NOT_V.has(b)) {
+    if (e === 'る' && !JA_GODAN_RU.has(b) && /[いきぎしじちぢにひびぴみりえけげせぜてでねへべぺめれ]る$/.test(rd))   // 一段
+      return jaAdd(s, ['る', 'ます', 'ました', 'ません', 'ませんでした', 'ましょう', 'ない', 'なかった', 'なくて', 'なければ', 'ないで', 'て', 'た', 'ては', 'ても', 'たら', 'たり', 'たい', 'たかった', 'たくない', 'れば', 'よう', 'られる', 'られた', 'させる', 'させた', 'ながら', 'ろ']);
+    const r = JA_ROW[e], te = s + JA_TE[e], d = 'ぐぬぶむ'.includes(e);   // 五段
+    return [b, ...jaAdd(s + r[1], ['ます', 'ました', 'ません', 'ませんでした', 'ましょう', 'たい', 'たかった', 'たくない', 'ながら']),
+      ...jaAdd(s + r[0], ['ない', 'なかった', 'なくて', 'なければ', 'ないで', 'れる', 'れた', 'せる', 'せた']),
+      ...jaAdd(te, d ? ['で', 'だ', 'では', 'でも', 'だら', 'だり'] : ['て', 'た', 'ては', 'ても', 'たら', 'たり']),
+      s + r[3] + 'ば', s + r[4] + 'う'];
+  }
+  if (e === 'い' && b.length > 1 && !JA_NOT_A.has(b))   // い形容詞
+    return jaAdd(s, ['い', 'かった', 'くない', 'くなかった', 'くて', 'く', 'ければ', 'さ', 'そう', 'すぎる', 'すぎ']);
+  return [b];
+}
+// 比對表：開頭字 → [[寫法, 'w 索引,…'], …]，長的排前面
+function jaIndex() {
+  if (JP.ja) return JP.ja;
+  const exact = new Map(), gen = new Map();
+  const put = (m, f, i) => { const a = m.get(f) || m.set(f, []).get(f); if (!a.includes(i)) a.push(i); };
+  JP.w.forEach(([b0, rd0], i) => {
+    const bs = b0.split('、'), rds = rd0.split('、');   // 「回る、回す」這種一筆兩個詞
+    bs.forEach((b, n) => {
+      if (/^[ぁ-ゖ]{1,2}$/.test(b)) return;   // 兩字以下的平假名詞（もう、まだ、でも…）太常見又容易拆錯，不標
+      const rd = rds[n] || rds[0], fix = JA_FIX[b];
+      put(exact, b, i);
+      for (const base of [fix || b, b.includes('御') && b.replace(/御/g, 'ご'), JA_KANA.includes(b) && rd].filter(Boolean)) {
+        let fs = jaForms(base, rd);
+        if (b === '行う') fs = fs.filter(f => !f.startsWith('行っ'));   // 「行った」「行って」幾乎都是「行く」，不當成「行う」
+        for (const f of fs) put(gen, f, i);
+      }
+    });
+  });
+  for (const f of exact.keys()) gen.delete(f);   // 剛好是某個詞的辭書形，就只對到那個詞（「知らせる」不算「知る」的活用）
+  const idx = new Map();
+  for (const [f, ids] of [...exact, ...gen]) { const c = f[0]; (idx.get(c) || idx.set(c, []).get(c)).push([f, ids.join(',')]); }
+  for (const a of idx.values()) a.sort((x, y) => y[0].length - x[0].length);
+  return (JP.ja = idx);
+}
+const isHan = c => !!c && /[一-鿿々〆]/.test(c), isKata = c => !!c && /[ァ-ヺー]/.test(c);
+// 單一漢字的詞前後不能接漢字（「以上」的「上」不算）；片假名詞前後不能接片假名（「バスケット」的「バス」不算）
+function jaOk(t, i, f) {
+  const p = t[i - 1], n = t[i + f.length];
+  if (f.length === 1 && isHan(f)) return !isHan(p) && !isHan(n);
+  if (/^[ァ-ヺー]+$/.test(f)) return !isKata(p) && !isKata(n);
+  return true;
+}
+function markJA(line, seen) {
+  const idx = jaIndex();
+  let out = '', last = 0, i = 0;
+  while (i < line.length) {
+    const hit = (idx.get(line[i]) || []).find(([f]) => line.startsWith(f, i) && jaOk(line, i, f));
+    if (!hit) { i++; continue; }
+    const [f, ids] = hit;
+    if (!seen.has(ids)) {   // 同一個詞（不管哪種活用）每章只標一次
+      seen.add(ids);
+      out += esc(line.slice(last, i)) + `<span class="jw" data-w="${ids}">${esc(f)}</span>`;
+      last = i + f.length;
+    }
+    i += f.length;
+  }
+  return out + esc(line.slice(last));
+}
+
 // 同一個詞在同一章（或同一段 JP_SPAN 字）裡只標第一次；seen 由 buildFlow 傳入、換章時清空
 function markJP(line, seen) {
   if (!db.set.jp || !JP.re) return esc(line);
+  if (R.ja) return markJA(line, seen);
   let out = '', last = 0, m;
   JP.re.lastIndex = 0;
   while ((m = JP.re.exec(line))) {
@@ -364,13 +451,16 @@ function speakJP(t) {
 function closeWord() { document.querySelectorAll('.wcard').forEach(e => e.remove()); document.querySelectorAll('#flow .jw.on').forEach(e => e.classList.remove('on')); }
 function showWord(el) {
   closeWord();
-  const zh = el.dataset.k, ids = JP.k && JP.k[zh]; if (!ids) return;
+  const ja = el.dataset.w != null, zh = el.dataset.k;
+  const ids = ja ? (JP.w ? el.dataset.w.split(',').map(Number) : null) : JP.k && JP.k[zh]; if (!ids) return;
   el.classList.add('on');
   const tts = 'speechSynthesis' in window;
   const c = document.createElement('div'); c.className = 'wcard';
-  c.innerHTML = `<div class="wz"><b>${esc(zh)}</b> 的日文</div>` + ids.map(i => {
-    const [jp, rd, lv] = JP.w[i];
-    return `<div class="wh"><span class="wj">${esc(jp)}</span>${rd && rd !== jp ? `<span class="wr">${esc(rd)}</span>` : ''}<span class="wl">N${lv}</span>${tts ? `<button class="ws" data-act="say" data-t="${esc(rd || jp)}" aria-label="聽發音">🔊</button>` : ''}</div>`;
+  // 中文書：中文詞 → 日文；日文書：書上的日文（可能是活用形）→ 原形、讀音和中文意思
+  c.innerHTML = (ja ? `<div class="wz"><b>${esc(el.textContent)}</b> 的意思</div>` : `<div class="wz"><b>${esc(zh)}</b> 的日文</div>`) + ids.map(i => {
+    const [jp0, rd, lv] = JP.w[i], jp = JA_FIX[jp0] || jp0;   // 「曲る」顯示成常見的「曲がる」
+    return `<div class="wh"><span class="wj">${esc(jp)}</span>${rd && rd !== jp ? `<span class="wr">${esc(rd)}</span>` : ''}<span class="wl">N${lv}</span>${tts ? `<button class="ws" data-act="say" data-t="${esc(rd || jp)}" aria-label="聽發音">🔊</button>` : ''}</div>`
+      + (ja ? `<div class="wm">${esc(JP.zh[i].join('、'))}</div>` : '');
   }).join('');
   $('#reader').appendChild(c);
   const r = el.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight, ch = c.offsetHeight;
@@ -382,6 +472,7 @@ function buildFlow(b) {
   const lines = b.text.replace(/\r\n?/g, '\n').split('\n');
   const out = [`<div class="head"><div class="bt">${esc(b.title)}</div>${b.author ? `<div class="ba">${esc(b.author)}</div>` : ''}<div class="bd"></div></div>`];
   const chaps = []; let off = 0, blank = 0, seen = new Set(), seenAt = 0, fmt = [];
+  R.ja = isJaText(b.text);   // 日文書改成標日文詞、顯示中文意思
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, '');
     if (!line.trim()) { if (++blank === 1) out.push('<p class="gap"></p>'); off += raw.length + 1; continue; }
