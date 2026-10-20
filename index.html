@@ -91,6 +91,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 #flow .head .bt { font-size: 1.7em; font-weight: 700; line-height: 1.5; }
 #flow .head .ba { margin-top: 1em; color: var(--sub); }
 #flow .head .bd { width: 40px; height: 2px; background: var(--accent); margin: 1.4em auto 0; }
+#flow .pb { break-before: column; height: 0; }
 #flow .end { break-before: column; height: 100%; display: grid; place-items: center; color: var(--sub); text-align: center; }
 .foot { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 6px); display: flex; justify-content: space-between; padding: 0 20px; font-size: 11px; color: var(--sub); pointer-events: none; font-variant-numeric: tabular-nums; }
 .foot span:first-child { max-width: 60%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -302,6 +303,7 @@ const CHAP_RE = /^\s*(第[\s0-9０-９一二三四五六七八九十百千零〇
 /* ===== 日文單字：中文詞對到 JLPT N5／N4 的日文說法（資料在 words-jp.json），點一下看日文寫法、讀音 ===== */
 // words-jp.json：{ w: [[日文, 讀音, 級別], …], k: { 中文詞: [w 的索引, …] } }
 const JP = { w: null, k: null, re: null, loading: null };
+const PB_RE = /^\s*==nextpage==\s*$/i;   // 整行只有 ==nextpage== 就強制換頁
 const JP_SPAN = 5000;   // 沒有章節的書：每 5000 字重新標一次
 function loadJP() {
   if (JP.re || JP.loading) return JP.loading;
@@ -352,6 +354,7 @@ function buildFlow(b) {
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, '');
     if (!line.trim()) { if (++blank === 1) out.push('<p class="gap"></p>'); off += raw.length + 1; continue; }
+    if (PB_RE.test(line)) { out.push('<div class="pb"></div>'); blank = 1; off += raw.length + 1; continue; }  // 強制換頁，後面的空行不再補空白
     blank = 0;
     if (line.trim().length <= 40 && CHAP_RE.test(line)) {
       chaps.push({ o: off, t: line.trim() });

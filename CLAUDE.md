@@ -31,6 +31,7 @@ books/index.json           書庫清單，由 GitHub Actions 自動產生（只�
 
 - 排版用 CSS 多欄：`#flow` 設定 `column-width` 等於版面寬，一欄就是一頁，換頁時用 `translateX(-頁 × stride)` 平移。
 - 每一行都會變成 `<p data-o=字元位置>`，章節標題（符合 `CHAP_RE` 且長度在 40 字以內的行）會變成 `<h2>`。
+- 強制換頁：整行只有 `==nextpage==`（符合 `PB_RE`，不分大小寫、前後空白不計）會變成 `<div class="pb">`（`break-before: column`），這行本身不顯示，緊接的空行也不補空白。兩頁並排時是換到下一欄，不是下一組兩頁。
 - 進度存在 localStorage 的 `hontana.v1` → `prog[書id] = { o 字元位置, pct, p 頁, n 總頁數, sig 排版簽名, at }`。
   - 還原時，如果 `sig` 和總頁數都沒變，直接回到同一頁；有變（換了裝置、字級或旋轉螢幕）就用 `o` 重新找出對應的頁。
 - 設定存在 `hontana.v1.set`，包括字級 `fs`、行距 `lh`、字型 `font`（serif／sans）、主題 `theme`（sepia／white／night）。
